@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -26,6 +27,7 @@ from app.contracts.schemas import (
     MissionListResponse,
     ProjectCreateRequest,
     ProjectResponse,
+    ProfileUpdateRequest,
     RegisterRequest,
     ResumeJdMissionCreate,
     TaskResponse,
@@ -89,7 +91,13 @@ class StoredUser:
     id: UUID
     email: str
     password_hash: str
+    full_name: str = ""
     role: str = "USER"
+    onboarding_completed: bool = False
+    ai_awareness: str = "AI_UNAWARE"
+    default_mode: str = "AUTO"
+    explanation_level: str = "STANDARD"
+    execution_priority: str = "QUALITY"
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -123,7 +131,21 @@ class StoredMission:
 
 
 def _hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 310_000)
+    return f"pbkdf2_sha256$310000${salt.hex()}${digest.hex()}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        algorithm, rounds_text, salt_hex, digest_hex = stored_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return hmac.compare_digest(stored_hash, _hash_password(password))
+        rounds = int(rounds_text)
+        expected = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), rounds).hex()
+        return hmac.compare_digest(expected, digest_hex)
+    except (TypeError, ValueError):
+        return False
 
 
 def _encode_token(user_id: UUID, email: str) -> str:
@@ -472,18 +494,40 @@ def register_user(payload: RegisterRequest) -> UserSummaryResponse:
     for existing in USERS.values():
         if existing.email.casefold() == payload.email.casefold():
             raise HTTPException(status_code=409, detail="USER_ALREADY_EXISTS")
-    user = StoredUser(id=uuid4(), email=payload.email, password_hash=_hash_password(payload.password), role="USER")
+    user = StoredUser(id=uuid4(), email=payload.email, password_hash=_hash_password(payload.password), full_name=payload.full_name.strip(), role="USER")
     USERS[user.id] = user
-    return UserSummaryResponse(id=user.id, email=user.email, role=user.role, created_at=user.created_at)
+    return UserSummaryResponse(id=user.id, email=user.email, role=user.role, full_name=user.full_name, onboarding_completed=user.onboarding_completed, created_at=user.created_at)
 
 
 @app.post("/api/v1/auth/login", response_model=AuthTokenResponse, tags=["auth"])
 def login_user(payload: LoginRequest) -> AuthTokenResponse:
     user = next((candidate for candidate in USERS.values() if candidate.email.casefold() == payload.email.casefold()), None)
-    if user is None or user.password_hash != _hash_password(payload.password):
+    if user is None or not _verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="INVALID_CREDENTIALS")
     token = _encode_token(user.id, user.email)
     return AuthTokenResponse(access_token=token, user_id=user.id, email=user.email, role=user.role)
+
+
+@app.get("/api/v1/auth/me", response_model=UserSummaryResponse, tags=["auth"])
+def current_user(authorization: str | None = Header(default=None, alias="Authorization")) -> UserSummaryResponse:
+    user = _require_authenticated_user(authorization)
+    return UserSummaryResponse(id=user.id, email=user.email, role=user.role, full_name=user.full_name, onboarding_completed=user.onboarding_completed, created_at=user.created_at)
+
+
+@app.post("/api/v1/auth/logout", status_code=204, tags=["auth"])
+def logout_user(authorization: str | None = Header(default=None, alias="Authorization")) -> None:
+    _require_authenticated_user(authorization)
+
+
+@app.patch("/api/v1/auth/profile", response_model=UserSummaryResponse, tags=["auth"])
+def update_profile(payload: ProfileUpdateRequest, authorization: str | None = Header(default=None, alias="Authorization")) -> UserSummaryResponse:
+    user = _require_authenticated_user(authorization)
+    user.ai_awareness = payload.ai_awareness
+    user.default_mode = payload.default_mode
+    user.explanation_level = payload.explanation_level
+    user.execution_priority = payload.execution_priority
+    user.onboarding_completed = True
+    return UserSummaryResponse(id=user.id, email=user.email, role=user.role, full_name=user.full_name, onboarding_completed=user.onboarding_completed, created_at=user.created_at)
 
 
 @app.post("/api/v1/projects", response_model=ProjectResponse, status_code=201, tags=["projects"])

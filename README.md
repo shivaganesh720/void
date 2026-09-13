@@ -4,7 +4,7 @@
 
 ## Status
 
-VOID currently delivers a deterministic, lexical Resume/JD development slice with mission observability. It is suitable for a local demonstration and portfolio review. It is **not production-ready**: authentication, durable persistence, workers, model providers, approvals, artifacts, retries, cancellation, and deployment hardening are not implemented.
+VOID currently delivers a local governed product journey from public landing page through registration, onboarding, project-scoped workspace, and deterministic Resume/JD analysis. It is suitable for local demonstration and portfolio review, but is not production-ready.
 
 ## Problem and solution
 
@@ -28,7 +28,7 @@ The frontend calls the FastAPI boundary. The API validates input, creates an in-
 4. Open Missions to filter and inspect task state and lifecycle events.
 5. Refresh or restart to observe the documented process-memory limitation.
 
-See [docs/architecture-overview.md](docs/architecture-overview.md) and [docs/end-to-end-workflow.md](docs/end-to-end-workflow.md).
+See [docs/README.md](docs/README.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [docs/end-to-end-workflow.md](docs/end-to-end-workflow.md).
 
 ## Technology stack
 
@@ -74,7 +74,7 @@ Follow [docs/demo-runbook.md](docs/demo-runbook.md). No screenshots are committe
 
 ## Security and limitations
 
-Upload validation, output validation, CORS configuration, safe logging, and project-filter behavior are covered in the current slice. There is no authentication or server-enforced membership, so client-supplied project IDs are not authorization. Data is process memory and disappears on restart. See [docs/security-model.md](docs/security-model.md) and [docs/void-known-limitations.md](docs/void-known-limitations.md).
+Upload validation, output validation, CORS configuration, safe logging, bearer authentication, and project membership checks are covered in the current slice. Refresh-token rotation, durable identity storage, email delivery, and production deployment hardening remain deferred. See [docs/security-model.md](docs/security-model.md) and [docs/REQUIREMENT_STATUS.md](docs/REQUIREMENT_STATUS.md).
 
 ## Project structure
 

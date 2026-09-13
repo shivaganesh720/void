@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function ResetPasswordPage() { return <main className="onboarding-page"><div className="onboarding-card"><span className="brand-orbit">◌</span><p className="eyebrow">PASSWORD RESET</p><h1>Secure reset links are ready for email delivery.</h1><p className="muted">Email delivery is intentionally disabled in local development. Configure the mail provider and one-time token service before enabling production resets.</p><Link className="button button-primary" href="/login">Return to sign in</Link></div></main>; }

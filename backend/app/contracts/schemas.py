@@ -29,6 +29,7 @@ class ExecutionProfileRequest(BaseModel):
 
 
 class RegisterRequest(BaseModel):
+    full_name: str = Field(default="", max_length=200)
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=8, max_length=200)
 
@@ -50,7 +51,16 @@ class UserSummaryResponse(BaseModel):
     id: UUID
     email: str
     role: str
+    full_name: str = ""
+    onboarding_completed: bool = False
     created_at: datetime | None = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    ai_awareness: str = Field(default="AI_UNAWARE", pattern="^(AI_UNAWARE|AI_AWARE)$")
+    default_mode: str = Field(default="AUTO", pattern="^(AUTO|GUIDED|MANUAL)$")
+    explanation_level: str = Field(default="STANDARD", pattern="^(SIMPLE|STANDARD|TECHNICAL)$")
+    execution_priority: str = Field(default="QUALITY", pattern="^(QUALITY|SPEED|COST|PRIVACY)$")
 
 
 class ProjectCreateRequest(BaseModel):

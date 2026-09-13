@@ -1,8 +1,8 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.contracts.enums import ExecutionMode, MissionStatus, TaskStatus
@@ -50,7 +50,7 @@ class Mission(Timestamped, Base):
     execution_mode: Mapped[str] = mapped_column(String(20), default=ExecutionMode.AUTO.value)
     status: Mapped[str] = mapped_column(String(40), default=MissionStatus.DRAFT.value, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class Task(Timestamped, Base):
@@ -62,7 +62,7 @@ class Task(Timestamped, Base):
     status: Mapped[str] = mapped_column(String(40), default=TaskStatus.CREATED.value, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
-    result_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Artifact(Timestamped, Base):
@@ -83,4 +83,4 @@ class AuditEvent(Timestamped, Base):
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     event_type: Mapped[str] = mapped_column(String(100), index=True)
     actor_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)

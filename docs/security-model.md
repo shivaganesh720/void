@@ -12,11 +12,11 @@
 
 ## Important boundary
 
-There is no authentication middleware, session, user identity, or server-derived project membership. `project_id` is supplied by the client and only filters the in-memory store. A cross-project mismatch currently returns `404`, but this is not an authorization guarantee. Do not deploy this API with sensitive data.
+The local API includes bearer-token registration/login, current-user, logout, and server-side project membership checks. Mission requests must carry the access token. User/project identity is still held in the local runtime rather than a durable identity/session repository, so this is not production deployment security.
 
 ## Missing controls
 
-Durable access checks, tenant isolation, file signature and malware scanning, rate limiting, secret management, retention/deletion policy, audit persistence, CSRF/session policy, production headers, and database transaction tests are not implemented or verified. No API keys are required or logged because there is no provider integration.
+Refresh-token rotation, durable sessions, rate limiting, file signature and malware scanning, retention/deletion policy, audit persistence, CSRF/session policy, production headers, and database transaction integration are not implemented or verified. No API keys are required or logged because there is no provider integration.
 
 ## Release decision
 

@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function VerifyEmailPage() { return <main className="onboarding-page"><div className="onboarding-card"><span className="brand-orbit">✓</span><p className="eyebrow">EMAIL VERIFICATION</p><h1>Your workspace stays yours.</h1><p className="muted">Verification email delivery is a local-development placeholder. The account journey remains available while a mail provider is configured.</p><Link className="button button-primary" href="/workspace">Continue to workspace</Link></div></main>; }

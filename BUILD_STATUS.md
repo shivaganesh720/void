@@ -1,21 +1,21 @@
 # VOID Build Status
 
 **Verified:** 2026-09-13
-**Phase:** Local Resume/JD development slice with mission observability
+**Phase:** Public-to-workspace journey with local Resume/JD mission execution
 **Status:** PARTIALLY IMPLEMENTED
-**Estimated completion:** 30% of requested control-plane scope
+**Estimated completion:** First user journey implemented; broader control-plane scope remains partial
 
 ## Verified checks
 
 | Check                     | Result                     |
 | ------------------------- | -------------------------- |
-| Backend unit tests        | 15 passed                  |
+| Backend unit tests        | 21 passed                  |
 | Frontend production build | Passed with Next.js 16.3.5 |
 | Frontend dependency audit | 0 vulnerabilities          |
 | Database migrations       | Not implemented            |
 | End-to-end mission        | Not implemented            |
 
-As of 2026-09-13, 15 backend unit tests pass, the frontend build passes, npm reports zero vulnerabilities, and backend health/readiness/OpenAPI checks return 200 when Uvicorn is running. Backend tests emit two non-blocking FastAPI/Starlette test-client deprecation warnings.
+As of 2026-09-13, 21 backend unit tests pass, the frontend build passes across 10 routes, and backend tests emit two non-blocking FastAPI/Starlette test-client deprecation warnings.
 
 ## Implemented
 
@@ -32,11 +32,14 @@ As of 2026-09-13, 15 backend unit tests pass, the frontend build passes, npm rep
 - Dashboard summary and frontend mission timeline
 - Initial SQLAlchemy models for users, projects, members, missions, tasks, artifacts, and audit events
 - Next.js frontend presentation shell
+- Public landing, registration, login, onboarding, recovery, verification, and protected workspace routes
+- Bearer-token auth, current-user/logout/profile endpoints, salted PBKDF2 password verification
+- User-owned project creation during onboarding and authenticated workspace mission requests
 
 ## Pending
 
-- Authentication and session invalidation
-- Project authorization and isolation enforcement
+- Refresh-token rotation and durable session invalidation
+- PostgreSQL-backed project authorization and isolation enforcement
 - SQLAlchemy session wiring and Alembic migrations
 - Durable project/file/approval/artifact/audit APIs
 - Task State Service with leases, heartbeats, retries, and cancellation
@@ -61,4 +64,4 @@ These features must remain disabled until fully implemented and tested:
 
 ## Next milestone
 
-Implement authenticated project-scoped persistence and mission/file APIs. Do not mark the Resume/JD workflow complete until real document extraction, task execution, artifact storage, and audit persistence are tested.
+Implement durable PostgreSQL identity/session/project repositories, then add secure file/artifact/audit persistence and browser end-to-end tests. Do not mark the broader V1 control plane complete until those features are executable and verified.

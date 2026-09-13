@@ -61,6 +61,6 @@ Stores project-scoped missions, inputs, profiles, blueprints, tasks, attempts, d
 
 ## Current implementation
 
-Implemented: contracts, lifecycle validation, basic policy and strategy services, upload checks, initial SQLAlchemy models, health endpoints, and a frontend shell.
+Implemented: contracts, lifecycle validation, basic policy and strategy services, upload checks, SQLAlchemy model/session foundation, health endpoints, bearer auth, project access checks, public/auth/onboarding routes, and the protected frontend workspace.
 
-Not implemented: authentication, migrations, mission APIs, real document extraction, gateways, scheduler, approvals, artifacts, audit persistence, and end-to-end execution.
+Not implemented: refresh-token/session persistence, migrations wired to runtime, provider gateways, scheduler, durable artifact/audit persistence, and browser end-to-end execution.

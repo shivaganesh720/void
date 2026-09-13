@@ -17,6 +17,7 @@
             "approve": true,
             "matchCommandLine": true
         },
-        ".\\.venv\\Scripts\\python.exe": true
+        ".\\.venv\\Scripts\\python.exe": true,
+        "npm install": true
     }
 }
