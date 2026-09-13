@@ -54,7 +54,7 @@ def test_database_settings_expose_runtime_pool_and_health_configuration() -> Non
 
 
 def test_alembic_environment_targets_project_metadata() -> None:
-    env_path = Path(__file__).resolve().parents[2] / "backend" / "alembic" / "env.py"
+    env_path = Path(__file__).parent.parent.parent / "alembic" / "env.py"
     content = env_path.read_text(encoding="utf-8")
 
     assert "target_metadata = Base.metadata" in content
