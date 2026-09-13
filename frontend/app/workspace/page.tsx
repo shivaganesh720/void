@@ -166,9 +166,57 @@ export default function Home() {
         {summary?.recent_missions.length ? <section className="recent"><p className="eyebrow">RECENT MISSIONS</p>{summary.recent_missions.map((item) => <button className="mission-row" key={item.id} onClick={() => { selectView("missions"); void openMission(item); }}><span>{item.intent}</span><b>{item.status}</b><small>{new Date(item.created_at).toLocaleString()}</small></button>)}</section> : !loading && <EmptyState title="No missions yet" detail="Start a Resume/JD Analysis mission to see activity here." />}
       </>}
       {view === "missions" && <section className="page-section"><div className="section-heading"><div><p className="eyebrow">PROJECT MISSIONS</p><h2>Mission history</h2></div><button type="button" onClick={() => void loadMissions()}>Refresh</button></div><div className="mission-filters"><input aria-label="Search missions" value={missionSearch} onChange={(event) => setMissionSearch(event.target.value)} placeholder="Search name or ID" /><select aria-label="Filter mission status" value={missionStatus} onChange={(event) => setMissionStatus(event.target.value)}><option value="">All statuses</option><option value="COMPLETED">Completed</option><option value="RUNNING">Running</option><option value="FAILED">Failed</option><option value="BLOCKED">Blocked</option></select></div>{loading && <p className="muted">Loading missions...</p>}{!loading && !missions.length && <EmptyState title="No matching missions" detail="Start a Resume/JD Analysis mission or adjust the current filters." />}{missions.map((item) => <button className="mission-row" key={item.id} onClick={() => void openMission(item)}><span>{item.intent}<small>{item.id}</small></span><b>{item.status}</b><small>{new Date(item.updated_at ?? item.created_at).toLocaleString()}</small></button>)}{selectedMission && <div className="mission-result"><p className="eyebrow">MISSION DETAIL</p><h2>{selectedMission.intent}</h2><p>{selectedMission.id}</p><p>Status: <strong>{selectedMission.status}</strong> / Task: <strong>{selectedMission.task.status}</strong></p><p className="muted">Execution mode: {selectedMission.execution_mode ?? "AUTO"} {selectedMission.completed_at ? `/ completed ${new Date(selectedMission.completed_at).toLocaleString()}` : ""}</p>{selectedMission.events?.length ? <div className="timeline"><h3>Event timeline</h3>{selectedMission.events.map((event) => <p key={event.id}><b>{event.event_type}</b> {event.detail}<small>{new Date(event.timestamp).toLocaleString()}</small></p>)}</div> : <p className="muted">No events recorded.</p>}{selectedMission.result && <AnalysisResult analysis={selectedMission.result} />}{selectedMission.error && <p className="error">{selectedMission.error}</p>}</div>}</section>}
-      {view === "approvals" && <UnsupportedState feature="Approvals" />}
-      {view === "artifacts" && <UnsupportedState feature="Artifacts" />}
-      {view === "settings" && <UnsupportedState feature="Settings" />}
+      {view === "approvals" && <section className="page-section">
+        <div className="section-heading">
+          <div><p className="eyebrow">GOVERNANCE</p><h2>Approval Center</h2></div>
+        </div>
+        <EmptyState title="No pending approvals" detail="There are no missions currently blocked awaiting your authorization." />
+      </section>}
+      {view === "artifacts" && <section className="page-section">
+        <div className="section-heading">
+          <div><p className="eyebrow">RECORDS</p><h2>Artifact & Evidence Registry</h2></div>
+        </div>
+        <EmptyState title="No artifacts generated" detail="Mission artifacts and execution evidence will appear here once a mission completes." />
+      </section>}
+      {view === "settings" && <section className="page-section">
+        <div className="section-heading">
+          <div><p className="eyebrow">PREFERENCES</p><h2>Workspace Settings</h2></div>
+        </div>
+        <div className="settings-grid">
+          <section className="settings-card">
+            <h3>Execution Defaults</h3>
+            <label>
+              <span>Default Mode</span>
+              <select defaultValue="AUTO">
+                <option value="AUTO">AUTO (Recommended)</option>
+                <option value="GUIDED">GUIDED</option>
+                <option value="MANUAL">MANUAL</option>
+              </select>
+            </label>
+            <label>
+              <span>Privacy Mode</span>
+              <select defaultValue="STANDARD">
+                <option value="STANDARD">Standard</option>
+                <option value="STRICT">Strict (Local only)</option>
+              </select>
+            </label>
+          </section>
+          
+          <section className="settings-card">
+            <h3>Provider Configuration</h3>
+            <p className="muted">API keys are securely stored and never exposed to agents.</p>
+            <label>
+              <span>OpenAI API Key</span>
+              <input type="password" placeholder="sk-..." />
+            </label>
+            <label>
+              <span>Anthropic API Key</span>
+              <input type="password" placeholder="sk-ant-..." />
+            </label>
+            <button className="button-secondary" type="button">Save Keys</button>
+          </section>
+        </div>
+      </section>}
     </section>
   </main>;
 }
