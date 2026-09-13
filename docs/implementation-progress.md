@@ -2,16 +2,29 @@
 
 ## 2026-09-13
 
-**Area:** Audit, contracts, VMCF primitives, file boundary, and Resume/JD analysis
+### Completed
 
-**Files changed:** `docs/implementation-audit.md`, backend contracts/configuration/errors, control-plane policy/state/strategy, file validation, workflow analysis, focused unit tests.
+- Rewrote the repository documentation set for consistency.
+- Added and verified the backend contract foundation.
+- Added lifecycle, policy, strategy, file-validation, and Resume/JD analysis services.
+- Added initial SQLAlchemy models and environment configuration.
+- Added and verified the Next.js presentation shell.
+- Upgraded Next.js to 16.3.5.
 
-**Implemented:** Baseline audit, typed execution modes and lifecycle states, transition validation, bounded strategy resolution, pre-execution policy decisions, upload checks, deterministic skill normalization, source-labeled evidence, and a FastAPI liveness/readiness boundary.
+### Verification
 
-**Tests run:** `PYTHONPATH=backend .venv\\Scripts\\python.exe -m pytest tests\\unit -q`
+- `PYTHONPATH=backend .venv\\Scripts\\python.exe -m pytest tests\\unit -q`: 9 passed.
+- `npm run build`: passed.
+- `npm audit --audit-level=moderate`: 0 vulnerabilities.
 
-**Test result:** 9 passed.
+### Warnings
 
-**Known limitations:** No authentication, persistence wiring, migrations, document parser, model gateway, tool gateway, artifact release, or frontend runtime exists yet. Skill normalization is intentionally lexical and not a complete taxonomy.
+The backend test suite emits two non-blocking FastAPI/Starlette test-client deprecation warnings.
 
-**Next required action:** Add authenticated project-scoped API services and run PostgreSQL migrations before exposing mission creation.
+### Limitations
+
+Authentication, migrations, mission APIs, real document extraction, gateways, task execution, artifact storage, audit persistence, and integration/security tests remain pending.
+
+### Next action
+
+Implement authenticated project-scoped persistence and mission/file APIs before exposing mission creation.

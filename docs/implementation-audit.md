@@ -1,62 +1,47 @@
-# VOID Implementation Audit
+# Implementation Audit
 
 **Audit date:** 2026-09-13
-**Status:** Baseline audit, before application implementation
+**Status:** PARTIALLY_IMPLEMENTED
 
-## Existing implementation
+## Existing
 
-- Repository-level architecture, security, development, specification, and build-status documents exist.
-- Local development notes document Python, Node.js, PostgreSQL, pgvector, and Ollama availability.
-- Top-level directories exist for `backend`, `frontend`, `docs`, `scripts`, and `tests`.
-- The Git repository and Python virtual environment exist.
+- Repository architecture, security, development, and product specification documents
+- Python virtual environment and dependency manifests
+- FastAPI backend foundation
+- Next.js frontend foundation
+- Initial SQLAlchemy models
+- Unit tests for contracts, policy, strategy, files, workflow analysis, and health
 
-## Missing implementation
+## Implemented
 
-- Backend application, API routes, typed contracts, configuration, persistence models, and migrations.
-- Frontend application, typed API client, mission views, and error/loading states.
-- Authentication, project authorization, project isolation, file storage, and upload validation.
-- VMCF control-plane services, execution fabric, gateways, agents, validation, artifacts, approvals, audit, and observability.
-- Resume/JD vertical slice and real document extraction.
-- Automated unit, integration, security, and end-to-end tests.
-- Required detailed documentation, contracts, threat model, progress log, and final report.
+- Typed contracts and lifecycle enums
+- Central mission/task transition validation
+- Deterministic policy evaluation
+- Deterministic Resume/JD strategy selection
+- Basic upload validation
+- Lexical skill normalization and source-labelled evidence
+- FastAPI liveness/readiness endpoints
+- PostgreSQL-ready SQLAlchemy entities
+- Responsive frontend shell
 
-## Broken implementation
+## Missing
 
-- No executable application is present to start or test.
-- No migrations or database schema exist.
-- No API or UI exists to satisfy the documented workflows.
+- Authentication and authorization
+- Database sessions, migrations, and persistence repositories
+- Project, mission, file, approval, artifact, and audit APIs
+- Real PDF/DOCX extraction
+- Task state persistence, leases, retries, and cancellation
+- Model Gateway, Tool Gateway, Agent Harness, and scheduler
+- End-to-end Resume/JD execution and artifact storage
+- Integration, security, and end-to-end tests
 
-## Architectural violations
+## Risks
 
-- None observed in executable code because executable code is absent.
-- The primary risk is future drift from the documented rule that agents and the frontend must not bypass control-plane policy or gateways.
+- No request-level project isolation exists yet.
+- Database models are not connected to a running migration or session layer.
+- Upload validation does not yet inspect file signatures or scan content.
+- The frontend does not call mission APIs.
 
-## Security risks
+## Recommendation
 
-- There is no authentication or authorization boundary.
-- There is no file validation or project isolation enforcement.
-- There is no audit trail, structured error boundary, secret configuration, or rate-limiting hook.
-- Any future provider or tool integration must remain disabled until implemented behind a governed gateway.
-
-## Duplicate code
-
-- No source implementation was found; no duplicate executable code was identified.
-
-## Missing tests
-
-- All application test categories are missing, including state transition, policy, authorization, file validation, project isolation, API, and vertical-slice tests.
-
-## Recommended corrections
-
-1. Establish contract-first backend and frontend foundations with explicit status and error types.
-2. Add configuration, database session boundaries, UUID-scoped models, and migrations.
-3. Implement project authorization, file validation, VMCF strategy/policy services, and the task state service.
-4. Add the Resume/JD workflow using deterministic extraction and evidence-grounded output.
-5. Add a presentation layer backed only by typed APIs, then expand integration and security tests.
-6. Keep unavailable providers, tools, and non-goal capabilities explicitly disabled rather than simulated.
-
-## Current completion status
-
-**Overall:** 0% before this audit.
-
-This audit is the baseline. Subsequent status changes must be backed by executable tests and reflected in `docs/implementation-progress.md` and `BUILD_STATUS.md`.
+Build the next slice around authenticated project-scoped persistence and mission/file APIs. Keep all unavailable integrations disabled and update this audit after executable integration tests exist.
