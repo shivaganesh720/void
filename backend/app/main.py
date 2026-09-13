@@ -1,13 +1,36 @@
+import base64
+import hashlib
+import hmac
+import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.contracts.enums import ApprovalStatus, MissionStatus, TaskStatus
-from app.contracts.schemas import ApprovalDecisionUpdate, ApprovalRequest, ApprovalResponse, DashboardSummaryResponse, HealthResponse, MissionDetailResponse, MissionEventResponse, MissionListResponse, ResumeJdMissionCreate, TaskResponse
+from app.contracts.schemas import (
+    ApprovalDecisionUpdate,
+    ApprovalRequest,
+    ApprovalResponse,
+    AuthTokenResponse,
+    DashboardSummaryResponse,
+    ExecutionProfileRequest,
+    ExplanationReportResponse,
+    HealthResponse,
+    LoginRequest,
+    MissionDetailResponse,
+    MissionEventResponse,
+    MissionListResponse,
+    ProjectCreateRequest,
+    ProjectResponse,
+    RegisterRequest,
+    ResumeJdMissionCreate,
+    TaskResponse,
+    UserSummaryResponse,
+)
 from app.control_plane.state import validate_transition
 from app.core.config import get_settings
 from app.db.runtime import RuntimeStore
@@ -19,6 +42,12 @@ from app.workflows.resume_jd_analysis import build_analysis, validate_analysis
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
 logger = logging.getLogger("void.execution")
+SECRET_KEY = settings.database_url.encode() if settings.database_url else b"void-local-dev-secret"
+DEFAULT_DEMO_USER_EMAIL = "demo@void.local"
+DEFAULT_DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000099")
+USERS: dict[UUID, StoredUser] = {}
+PROJECTS: dict[UUID, StoredProject] = {}
+REPORTS: dict[UUID, dict] = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +85,24 @@ class StoredApproval:
 
 
 @dataclass
+class StoredUser:
+    id: UUID
+    email: str
+    password_hash: str
+    role: str = "USER"
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass
+class StoredProject:
+    id: UUID
+    name: str
+    owner_id: UUID
+    members: list[UUID] = field(default_factory=list)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass
 class StoredMission:
     id: UUID
     project_id: UUID
@@ -65,12 +112,178 @@ class StoredMission:
     result: dict | None = None
     error: str | None = None
     execution_mode: str = "AUTO"
+    execution_profile: dict | None = None
     approval_required: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     events: list[MissionEventResponse] = field(default_factory=list)
     approvals: list[StoredApproval] = field(default_factory=list)
+    explanation_report_id: str | None = None
+
+
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _encode_token(user_id: UUID, email: str) -> str:
+    payload = {"sub": str(user_id), "email": email, "exp": (datetime.now(UTC) + timedelta(days=7)).timestamp()}
+    body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
+    signature = hmac.new(SECRET_KEY, body.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{body}.{signature}"
+
+
+def _decode_token(token: str) -> tuple[UUID, str] | None:
+    try:
+        signing_input, signature = token.split(".", 1)
+    except ValueError:
+        return None
+    expected = hmac.new(SECRET_KEY, signing_input.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return None
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(signing_input + "=" * (-len(signing_input) % 4)).decode("utf-8"))
+    except Exception:
+        return None
+    exp = float(payload.get("exp", 0))
+    if exp < datetime.now(UTC).timestamp():
+        return None
+    try:
+        return UUID(payload["sub"]), str(payload.get("email", DEFAULT_DEMO_USER_EMAIL))
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_authenticated_user(authorization: str | None) -> StoredUser | None:
+    if not authorization:
+        return USERS.get(DEFAULT_DEMO_USER_ID) or StoredUser(id=DEFAULT_DEMO_USER_ID, email=DEFAULT_DEMO_USER_EMAIL, password_hash=_hash_password("demo-password"), role="USER")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    decoded = _decode_token(token)
+    if decoded is None:
+        return None
+    user_id, email = decoded
+    return USERS.get(user_id) or StoredUser(id=user_id, email=email, password_hash="", role="USER")
+
+
+def _require_authenticated_user(authorization: str | None) -> StoredUser:
+    user = _get_authenticated_user(authorization)
+    if user is None:
+        raise HTTPException(status_code=401, detail="AUTH_REQUIRED")
+    return user
+
+
+def _require_project_access(project_id: UUID, user: StoredUser) -> None:
+    project = PROJECTS.get(project_id)
+    if project is None:
+        if user.id == DEFAULT_DEMO_USER_ID:
+            project = StoredProject(id=project_id, name="Legacy Local Project", owner_id=user.id, members=[user.id])
+            PROJECTS[project_id] = project
+            return
+        raise HTTPException(status_code=404, detail="PROJECT_NOT_FOUND")
+    if user.id != project.owner_id and user.id not in project.members:
+        raise HTTPException(status_code=403, detail="PROJECT_ACCESS_DENIED")
+
+
+def _project_members(project_id: UUID) -> list[UUID]:
+    project = PROJECTS.get(project_id)
+    if project is None:
+        return []
+    return [project.owner_id, *project.members]
+
+
+def _build_explanation_report(mission: StoredMission) -> dict:
+    result = mission.result or {}
+    profile = mission.execution_profile or {"execution_mode": mission.execution_mode, "model_mode": "AUTO"}
+    summary = {
+        "mission_id": str(mission.id),
+        "project_id": str(mission.project_id),
+        "execution_mode": profile.get("execution_mode", mission.execution_mode),
+        "model_mode": profile.get("model_mode", "AUTO"),
+        "workflow": "resume_jd_intelligence_v1",
+        "steps": [
+            "Intent captured",
+            "Resume and JD parsed",
+            "Skill alignment computed",
+            "Validation and evidence checks applied",
+            "Artifact report generated",
+        ],
+        "status": mission.status.value,
+        "summary": result.get("match_analysis", {}).get("score_explanation", "No structured match analysis available."),
+        "why_selected": "The bounded workflow is the minimum sufficient strategy for resume/JD comparison.",
+    }
+    return {
+        "mission_id": mission.id,
+        "project_id": mission.project_id,
+        "summary": summary,
+        "execution_steps": [
+            {"step": "intent_capture", "status": "SUCCEEDED", "detail": mission.intent},
+            {"step": "document_parsing", "status": mission.task.status.value, "detail": "Parsed resume and job description text."},
+            {"step": "match_validation", "status": "SUCCEEDED", "detail": result.get("match_analysis", {}).get("overall_match_score", 0)},
+        ],
+        "evidence": result.get("evidence", []),
+        "artifacts": [{"artifact_type": "resume_jd_match_report", "version": "v1", "status": "CREATED"}],
+        "created_at": datetime.now(UTC),
+    }
+
+
+def _mission_payload(mission: StoredMission) -> dict:
+    return {
+        "id": mission.id,
+        "project_id": mission.project_id,
+        "intent": mission.intent,
+        "status": mission.status.value,
+        "task": {
+            "id": mission.task.id,
+            "mission_id": mission.task.mission_id,
+            "name": mission.task.name,
+            "status": mission.task.status.value,
+            "result": mission.task.result,
+            "error": mission.task.error,
+        },
+        "result": mission.result,
+        "error": mission.error,
+        "execution_mode": mission.execution_mode,
+        "execution_profile": mission.execution_profile,
+        "approval_required": mission.approval_required,
+        "created_at": mission.created_at,
+        "updated_at": mission.updated_at,
+        "completed_at": mission.completed_at,
+        "events": [event.model_dump(mode="json") for event in mission.events],
+        "approvals": [_approval_payload(approval) for approval in mission.approvals],
+        "explanation_report_id": mission.explanation_report_id,
+    }
+
+
+def _mission_from_payload(payload: dict) -> StoredMission:
+    task_payload = payload["task"]
+    task = StoredTask(
+        id=UUID(task_payload["id"]),
+        mission_id=UUID(task_payload["mission_id"]),
+        name=task_payload["name"],
+        status=TaskStatus(task_payload["status"]),
+        result=task_payload.get("result"),
+        error=task_payload.get("error"),
+    )
+    return StoredMission(
+        id=UUID(payload["id"]),
+        project_id=UUID(payload["project_id"]),
+        intent=payload["intent"],
+        status=MissionStatus(payload["status"]),
+        task=task,
+        result=payload.get("result"),
+        error=payload.get("error"),
+        execution_mode=payload.get("execution_mode", "AUTO"),
+        execution_profile=payload.get("execution_profile"),
+        approval_required=payload.get("approval_required", False),
+        created_at=datetime.fromisoformat(payload["created_at"]),
+        updated_at=datetime.fromisoformat(payload["updated_at"]),
+        completed_at=datetime.fromisoformat(payload["completed_at"]) if payload.get("completed_at") else None,
+        events=[MissionEventResponse.model_validate(event) for event in payload.get("events", [])],
+        approvals=[_approval_from_payload(approval) for approval in payload.get("approvals", [])],
+        explanation_report_id=payload.get("explanation_report_id"),
+    )
 
 
 def _approval_payload(approval: StoredApproval) -> dict:
@@ -109,61 +322,10 @@ def _approval_from_payload(payload: dict) -> StoredApproval:
     )
 
 
-def _mission_payload(mission: StoredMission) -> dict:
-    return {
-        "id": mission.id,
-        "project_id": mission.project_id,
-        "intent": mission.intent,
-        "status": mission.status.value,
-        "task": {
-            "id": mission.task.id,
-            "mission_id": mission.task.mission_id,
-            "name": mission.task.name,
-            "status": mission.task.status.value,
-            "result": mission.task.result,
-            "error": mission.task.error,
-        },
-        "result": mission.result,
-        "error": mission.error,
-        "execution_mode": mission.execution_mode,
-        "approval_required": mission.approval_required,
-        "created_at": mission.created_at,
-        "updated_at": mission.updated_at,
-        "completed_at": mission.completed_at,
-        "events": [event.model_dump(mode="json") for event in mission.events],
-        "approvals": [_approval_payload(approval) for approval in mission.approvals],
-    }
-
-
-def _mission_from_payload(payload: dict) -> StoredMission:
-    task_payload = payload["task"]
-    task = StoredTask(
-        id=UUID(task_payload["id"]),
-        mission_id=UUID(task_payload["mission_id"]),
-        name=task_payload["name"],
-        status=TaskStatus(task_payload["status"]),
-        result=task_payload.get("result"),
-        error=task_payload.get("error"),
-    )
-    return StoredMission(
-        id=UUID(payload["id"]),
-        project_id=UUID(payload["project_id"]),
-        intent=payload["intent"],
-        status=MissionStatus(payload["status"]),
-        task=task,
-        result=payload.get("result"),
-        error=payload.get("error"),
-        execution_mode=payload.get("execution_mode", "AUTO"),
-        approval_required=payload.get("approval_required", False),
-        created_at=datetime.fromisoformat(payload["created_at"]),
-        updated_at=datetime.fromisoformat(payload["updated_at"]),
-        completed_at=datetime.fromisoformat(payload["completed_at"]) if payload.get("completed_at") else None,
-        events=[MissionEventResponse.model_validate(event) for event in payload.get("events", [])],
-        approvals=[_approval_from_payload(approval) for approval in payload.get("approvals", [])],
-    )
-
-
 RUNTIME_STORE = RuntimeStore(settings.runtime_db_path)
+USERS[DEFAULT_DEMO_USER_ID] = StoredUser(id=DEFAULT_DEMO_USER_ID, email=DEFAULT_DEMO_USER_EMAIL, password_hash=_hash_password("demo-password"), role="USER")
+PROJECTS: dict[UUID, StoredProject] = {}
+REPORTS: dict[UUID, dict] = {}
 MISSIONS: dict[UUID, StoredMission] = {
     mission.id: mission for mission in (_mission_from_payload(payload) for payload in RUNTIME_STORE.load_all())
 }
@@ -222,6 +384,7 @@ def _mission_response(mission: StoredMission) -> MissionDetailResponse:
         updated_at=mission.updated_at,
         completed_at=mission.completed_at,
         execution_mode=mission.execution_mode,
+        execution_profile=mission.execution_profile,
         approval_required=mission.approval_required,
         events=mission.events,
         approvals=[_approval_response(approval) for approval in mission.approvals],
@@ -235,6 +398,7 @@ def _mission_list_response(mission: StoredMission) -> MissionListResponse:
         intent=mission.intent,
         status=mission.status,
         task=_task_response(mission.task),
+        execution_mode=mission.execution_mode,
         created_at=mission.created_at,
     )
 
@@ -303,8 +467,48 @@ def readiness() -> HealthResponse:
     return HealthResponse(status="ok", service=settings.app_name)
 
 
+@app.post("/api/v1/auth/register", response_model=UserSummaryResponse, status_code=201, tags=["auth"])
+def register_user(payload: RegisterRequest) -> UserSummaryResponse:
+    for existing in USERS.values():
+        if existing.email.casefold() == payload.email.casefold():
+            raise HTTPException(status_code=409, detail="USER_ALREADY_EXISTS")
+    user = StoredUser(id=uuid4(), email=payload.email, password_hash=_hash_password(payload.password), role="USER")
+    USERS[user.id] = user
+    return UserSummaryResponse(id=user.id, email=user.email, role=user.role, created_at=user.created_at)
+
+
+@app.post("/api/v1/auth/login", response_model=AuthTokenResponse, tags=["auth"])
+def login_user(payload: LoginRequest) -> AuthTokenResponse:
+    user = next((candidate for candidate in USERS.values() if candidate.email.casefold() == payload.email.casefold()), None)
+    if user is None or user.password_hash != _hash_password(payload.password):
+        raise HTTPException(status_code=401, detail="INVALID_CREDENTIALS")
+    token = _encode_token(user.id, user.email)
+    return AuthTokenResponse(access_token=token, user_id=user.id, email=user.email, role=user.role)
+
+
+@app.post("/api/v1/projects", response_model=ProjectResponse, status_code=201, tags=["projects"])
+def create_project(payload: ProjectCreateRequest, authorization: str | None = Header(default=None, alias="Authorization")) -> ProjectResponse:
+    user = _require_authenticated_user(authorization)
+    project_id = uuid4()
+    project = StoredProject(id=project_id, name=payload.name, owner_id=user.id, members=[user.id])
+    PROJECTS[project_id] = project
+    return ProjectResponse(id=project.id, name=project.name, owner_id=project.owner_id, members=project.members, created_at=project.created_at)
+
+
+@app.get("/api/v1/projects", response_model=list[ProjectResponse], tags=["projects"])
+def list_projects(authorization: str | None = Header(default=None, alias="Authorization")) -> list[ProjectResponse]:
+    user = _require_authenticated_user(authorization)
+    return [
+        ProjectResponse(id=project.id, name=project.name, owner_id=project.owner_id, members=project.members, created_at=project.created_at)
+        for project in PROJECTS.values()
+        if user.id in _project_members(project.id)
+    ]
+
+
 @app.post("/api/v1/missions/resume-jd", response_model=MissionDetailResponse, status_code=201, tags=["missions"])
-def create_resume_jd_mission(request: ResumeJdMissionCreate) -> MissionDetailResponse:
+def create_resume_jd_mission(request: ResumeJdMissionCreate, authorization: str | None = Header(default=None, alias="Authorization")) -> MissionDetailResponse:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(request.project_id, user)
     mission_id = uuid4()
     task = StoredTask(id=uuid4(), mission_id=mission_id, name="resume_jd_analysis")
     mission = StoredMission(
@@ -313,11 +517,20 @@ def create_resume_jd_mission(request: ResumeJdMissionCreate) -> MissionDetailRes
         intent="Compare resume with job description",
         status=MissionStatus.DRAFT,
         task=task,
+        execution_mode="AUTO",
+        execution_profile=request.execution_profile.model_dump() if request.execution_profile else None,
     )
+    if mission.execution_profile:
+        mission.execution_mode = mission.execution_profile.get("execution_mode", "AUTO")
     MISSIONS[mission_id] = mission
     _record_event(mission, "MISSION_CREATED", "Resume/JD mission created.")
     logger.info("mission_received mission_id=%s task_id=%s", mission_id, task.id)
     _execute_resume_jd(mission, request.resume_text, request.job_description)
+    if mission.result is not None:
+        report = _build_explanation_report(mission)
+        REPORTS[mission_id] = report
+        mission.explanation_report_id = str(mission_id)
+        _persist_mission(mission)
     return _mission_response(mission)
 
 
@@ -326,8 +539,11 @@ async def create_resume_jd_upload_mission(
     resume: UploadFile = File(...),
     job_description: UploadFile = File(...),
     project_id: UUID = Form(default=UUID("00000000-0000-0000-0000-000000000001")),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> MissionDetailResponse:
     """Ingest both documents through the file validator before mission execution."""
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
     try:
         resume_document = parse_document(resume.filename or "resume.txt", resume.content_type or "application/octet-stream", await resume.read(), "RESUME", settings.max_upload_bytes)
         jd_document = parse_document(job_description.filename or "jd.txt", job_description.content_type or "application/octet-stream", await job_description.read(), "JOB_DESCRIPTION", settings.max_upload_bytes)
@@ -335,7 +551,7 @@ async def create_resume_jd_upload_mission(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     mission_id = uuid4()
     task = StoredTask(id=uuid4(), mission_id=mission_id, name="resume_jd_analysis")
-    mission = StoredMission(id=mission_id, project_id=project_id, intent="Compare uploaded resume with job description", status=MissionStatus.DRAFT, task=task)
+    mission = StoredMission(id=mission_id, project_id=project_id, intent="Compare uploaded resume with job description", status=MissionStatus.DRAFT, task=task, execution_mode="AUTO")
     MISSIONS[mission_id] = mission
     _record_event(mission, "MISSION_CREATED", "Uploaded Resume/JD mission created.")
     _execute_resume_jd(mission, resume_document.extracted_text, jd_document.extracted_text)
@@ -343,18 +559,24 @@ async def create_resume_jd_upload_mission(
         mission.result["resume"]["file_name"] = resume_document.file_name
         mission.result["job_description"]["file_name"] = jd_document.file_name
         mission.result["warnings"] = list(set(mission.result["warnings"]) | set(resume_document.warnings) | set(jd_document.warnings))
+        report = _build_explanation_report(mission)
+        REPORTS[mission_id] = report
+        mission.explanation_report_id = str(mission_id)
         _persist_mission(mission)
     return _mission_response(mission)
 
 
 @app.get("/api/v1/missions", response_model=list[MissionListResponse], tags=["missions"])
 def list_missions(
+    authorization: str | None = Header(default=None, alias="Authorization"),
     project_id: UUID = Query(...),
     status: MissionStatus | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1, max_length=200),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[MissionListResponse]:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
     missions = [mission for mission in MISSIONS.values() if mission.project_id == project_id]
     if status is not None:
         missions = [mission for mission in missions if mission.status == status]
@@ -366,7 +588,12 @@ def list_missions(
 
 
 @app.get("/api/v1/dashboard/summary", response_model=DashboardSummaryResponse, tags=["dashboard"])
-def dashboard_summary(project_id: UUID = Query(...)) -> DashboardSummaryResponse:
+def dashboard_summary(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    project_id: UUID = Query(...),
+) -> DashboardSummaryResponse:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
     missions = [mission for mission in MISSIONS.values() if mission.project_id == project_id]
     return DashboardSummaryResponse(
         project_id=project_id,
@@ -380,7 +607,9 @@ def dashboard_summary(project_id: UUID = Query(...)) -> DashboardSummaryResponse
 
 
 @app.get("/api/v1/missions/{mission_id}", response_model=MissionDetailResponse, tags=["missions"])
-def get_mission(mission_id: UUID, project_id: UUID = Query(...)) -> MissionDetailResponse:
+def get_mission(mission_id: UUID, authorization: str | None = Header(default=None, alias="Authorization"), project_id: UUID = Query(...)) -> MissionDetailResponse:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
     mission = MISSIONS.get(mission_id)
     if mission is None or mission.project_id != project_id:
         raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
@@ -388,7 +617,9 @@ def get_mission(mission_id: UUID, project_id: UUID = Query(...)) -> MissionDetai
 
 
 @app.get("/api/v1/missions/{mission_id}/tasks", response_model=list[TaskResponse], tags=["missions"])
-def get_mission_tasks(mission_id: UUID, project_id: UUID = Query(...)) -> list[TaskResponse]:
+def get_mission_tasks(mission_id: UUID, authorization: str | None = Header(default=None, alias="Authorization"), project_id: UUID = Query(...)) -> list[TaskResponse]:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
     mission = MISSIONS.get(mission_id)
     if mission is None or mission.project_id != project_id:
         raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
@@ -396,11 +627,35 @@ def get_mission_tasks(mission_id: UUID, project_id: UUID = Query(...)) -> list[T
 
 
 @app.get("/api/v1/missions/{mission_id}/events", response_model=list[MissionEventResponse], tags=["missions"])
-def get_mission_events(mission_id: UUID, project_id: UUID = Query(...)) -> list[MissionEventResponse]:
+def get_mission_events(mission_id: UUID, authorization: str | None = Header(default=None, alias="Authorization"), project_id: UUID = Query(...)) -> list[MissionEventResponse]:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
     mission = MISSIONS.get(mission_id)
     if mission is None or mission.project_id != project_id:
         raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
     return mission.events
+
+
+@app.get("/api/v1/missions/{mission_id}/explanation-report", response_model=ExplanationReportResponse, tags=["missions"])
+def get_explanation_report(mission_id: UUID, authorization: str | None = Header(default=None, alias="Authorization"), project_id: UUID = Query(...)) -> ExplanationReportResponse:
+    user = _require_authenticated_user(authorization)
+    _require_project_access(project_id, user)
+    mission = MISSIONS.get(mission_id)
+    if mission is None or mission.project_id != project_id:
+        raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
+    report = REPORTS.get(mission_id) or _build_explanation_report(mission)
+    REPORTS[mission_id] = report
+    mission.explanation_report_id = str(mission_id)
+    _persist_mission(mission)
+    return ExplanationReportResponse(
+        mission_id=mission.id,
+        project_id=mission.project_id,
+        summary=report["summary"],
+        execution_steps=report.get("execution_steps", []),
+        evidence=report.get("evidence", []),
+        artifacts=report.get("artifacts", []),
+        created_at=report.get("created_at"),
+    )
 
 
 @app.post("/api/v1/missions/{mission_id}/approvals", response_model=ApprovalResponse, status_code=201, tags=["missions"])
@@ -408,6 +663,7 @@ def request_mission_approval(
     mission_id: UUID,
     project_id: UUID = Query(...),
     request: ApprovalRequest = None,
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> ApprovalResponse:
     if request is None:
         raise HTTPException(status_code=422, detail="Approval request body is required")

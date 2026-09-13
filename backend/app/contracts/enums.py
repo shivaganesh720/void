@@ -7,6 +7,15 @@ class ExecutionMode(StrEnum):
     MANUAL = "MANUAL"
 
 
+class ModelMode(StrEnum):
+    AUTO = "AUTO"
+    HIGH_QUALITY = "HIGH_QUALITY"
+    LOW_COST = "LOW_COST"
+    FAST = "FAST"
+    PRIVATE = "PRIVATE"
+    MANUAL = "MANUAL"
+
+
 class MissionStatus(StrEnum):
     DRAFT = "DRAFT"
     VALIDATING = "VALIDATING"

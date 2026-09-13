@@ -3,7 +3,66 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.contracts.enums import ApprovalStatus, ExecutionMode, MissionStatus, PolicyDecision, RiskLevel
+from app.contracts.enums import ApprovalStatus, ExecutionMode, MissionStatus, ModelMode, PolicyDecision, RiskLevel
+
+
+class ExecutionProfileRequest(BaseModel):
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
+    model_mode: ModelMode = ModelMode.AUTO
+    preferred_provider: str | None = Field(default=None, max_length=200)
+    fallback_providers: list[str] = Field(default_factory=list)
+    selected_agents: list[str] = Field(default_factory=list)
+    allowed_capabilities: list[str] = Field(default_factory=list)
+    allowed_tools: list[str] = Field(default_factory=list)
+    workflow_preference: str | None = Field(default=None, max_length=200)
+    validation_level: str = "STANDARD"
+    budget_limits: dict = Field(default_factory=dict)
+    token_limits: dict = Field(default_factory=dict)
+    time_limits: dict = Field(default_factory=dict)
+    retry_limits: dict = Field(default_factory=dict)
+    privacy_mode: str = "STANDARD"
+    research_permissions: bool = False
+    memory_permissions: bool = True
+    artifact_preferences: dict = Field(default_factory=dict)
+    approval_preferences: dict = Field(default_factory=dict)
+    explanation_detail_level: str = "STANDARD"
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: UUID
+    email: str
+    role: str = "USER"
+
+
+class UserSummaryResponse(BaseModel):
+    id: UUID
+    email: str
+    role: str
+    created_at: datetime | None = None
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ProjectResponse(BaseModel):
+    id: UUID
+    name: str
+    owner_id: UUID
+    members: list[UUID] = Field(default_factory=list)
+    created_at: datetime | None = None
 
 
 class HealthResponse(BaseModel):
@@ -23,12 +82,14 @@ class MissionCreate(BaseModel):
     intent: str = Field(min_length=1, max_length=10_000)
     execution_mode: ExecutionMode = ExecutionMode.AUTO
     target_role: str | None = Field(default=None, max_length=300)
+    execution_profile: ExecutionProfileRequest | None = None
 
 
 class ResumeJdMissionCreate(BaseModel):
     project_id: UUID = Field(default_factory=uuid4)
     resume_text: str = Field(min_length=1, max_length=200_000)
     job_description: str = Field(min_length=1, max_length=200_000)
+    execution_profile: ExecutionProfileRequest | None = None
 
 
 class TaskResponse(BaseModel):
@@ -89,6 +150,7 @@ class MissionDetailResponse(BaseModel):
     updated_at: datetime | None = None
     completed_at: datetime | None = None
     execution_mode: ExecutionMode = ExecutionMode.AUTO
+    execution_profile: ExecutionProfileRequest | None = None
     approval_required: bool = False
     events: list[MissionEventResponse] = Field(default_factory=list)
     approvals: list[ApprovalResponse] = Field(default_factory=list)
@@ -100,7 +162,18 @@ class MissionListResponse(BaseModel):
     intent: str
     status: MissionStatus
     task: TaskResponse
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
     created_at: datetime
+
+
+class ExplanationReportResponse(BaseModel):
+    mission_id: UUID
+    project_id: UUID
+    summary: dict
+    execution_steps: list[dict] = Field(default_factory=list)
+    evidence: list[dict] = Field(default_factory=list)
+    artifacts: list[dict] = Field(default_factory=list)
+    created_at: datetime | None = None
 
 
 class DashboardSummaryResponse(BaseModel):
