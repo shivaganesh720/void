@@ -1,30 +1,22 @@
-# Security Status
+# VOID Security Model & Rules
 
-## Status
+## 1. Threat Model
+- **Untrusted Input:** All prompt content, uploaded documents, and LLM generated outputs are treated as untrusted. They must be validated before persistence or execution.
+- **Agent Containment:** Agents run within strict capability boundaries. They cannot access the filesystem directly, execute raw terminal commands, or bypass the `SafeToolGateway`.
+- **Project Isolation:** Data leakage between projects is prevented at the database layer. All queries for missions, tasks, and artifacts must include a `project_id` filter.
 
-- Current status: PARTIAL
-- Verified local controls: password hashing, bearer auth, project access checks, upload validation, CORS config.
+## 2. Authentication & Authorization
+- **Authentication:** Standard JWT (Bearer Tokens) are required for all protected endpoints.
+- **Authorization:** Handled via FastAPI dependencies. 
+  - `get_current_user` extracts identity.
+  - Role-based Access Control (RBAC) allows only `ADMIN` roles to access `/api/v1/admin/*` endpoints.
 
-## Implemented Controls
+## 3. Auditing & Governance
+- **Audit Middleware:** All mutating requests (POST, PATCH, PUT, DELETE) are automatically intercepted and logged as `AuditEvent` records in the database.
+- **Approvals:** High-risk actions require manual human approval via the `/api/v1/approvals` router. Agents pause execution until the approval is granted.
 
-- PBKDF2 password hashing
-- bearer-token-based auth for local demo flows
-- project membership checks
-- server CORS configuration
-- upload size, MIME, extension, and executable-content validation
-- policy and lifecycle validation structures
-
-## Current Risks
-
-- Local demo auth is not a production identity system.
-- Refresh-token rotation and durable session revocation are not yet complete.
-- No full authorization model for admin/user roles beyond prototype behavior.
-- External provider and tool gateways are not implemented.
-- Full SSRF, prompt injection, sandboxing, and security-event persistence remain pending.
-
-## Required Next Action
-
-- add durable identity/session layer
-- implement admin ownership checks and role enforcement
-- add gateway-level tool and provider security controls
-- add test coverage for unauthorized access and malicious inputs
+## 4. Coding Rules
+1. **Never use raw SQL:** Always use SQLAlchemy ORM or the query builder to prevent SQL injection.
+2. **Never hardcode secrets:** All configuration MUST be loaded from environment variables via `app.core.config.Settings`.
+3. **Always validate schema:** Use Pydantic models for all API requests and responses.
+4. **Assume compromise:** Write every tool as if the agent calling it is actively trying to bypass boundaries.

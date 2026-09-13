@@ -1,66 +1,42 @@
 # VOID Architecture
 
-## Purpose
+## System Overview
 
-VOID is a governed control and execution plane. The frontend collects intent and displays state. The backend validates requests, resolves strategy, applies policy, executes bounded work, validates results, and persists evidence and audit data.
+VOID is a governed control and execution plane for agentic workflows. It ensures that AI agents operate within strict, verifiable boundaries defined by human intent, project scope, and system policies. 
 
-## Request flow
+The architecture strictly separates the presentation layer (Frontend) from the control plane (Backend), with a robust relational database (PostgreSQL/SQLite) providing durable persistence.
 
-```text
-User
-  -> Presentation
-  -> Application API
-  -> Intent Gate
-  -> Mission Kernel
-  -> Execution Profile
-  -> Capability Broker
-  -> Strategy Resolver
-  -> Pre-Execution Policy
-  -> Mission Blueprint
-  -> Work Graph
-  -> Task State Service
-  -> Agent Harness / Tool Gateway / Model Gateway
-  -> Validation
-  -> Artifact and Audit Persistence
-```
+## Core Components
 
-## Boundaries
+### 1. Presentation Layer (Frontend)
+- **Tech Stack:** Next.js, React, Tailwind CSS.
+- **Responsibilities:** Collects user intent, displays mission state, handles authentication flows, and renders real-time streaming updates via WebSockets. It **never** orchestrates execution or makes direct calls to LLMs.
 
-### Presentation
+### 2. Application API (Backend)
+- **Tech Stack:** FastAPI, Python, SQLAlchemy, Alembic.
+- **Responsibilities:** 
+  - **Auth & Access:** JWT-based authentication and project-scoped authorization.
+  - **Modular Routers:** Clean separation of concerns (`auth`, `missions`, `projects`, `gateways`, `approvals`, `workflows`, `websockets`).
+  - **Dependency Injection:** Database sessions, current user, and policy enforcers are injected cleanly into route handlers.
 
-Displays missions, tasks, approvals, evidence, artifacts, and errors. It does not select models, authorize tools, orchestrate tasks, or override policy.
+### 3. VMCF Control Plane
+- **Intent Normalization:** Translates raw user requests into structured mission blueprints.
+- **Policy Enforcement:** Applies pre-execution checks and risk validation.
+- **Gateways:** All tool execution and LLM interactions are routed through deterministic `SafeToolGateway` and `ModelGateway` implementations.
+- **Audit Logging:** Every mutating request is automatically intercepted by the `AuditMiddleware` and logged to the `AuditEvent` table.
 
-### Application API
+### 4. Persistence Layer
+- **Tech Stack:** SQLAlchemy ORM, Alembic migrations.
+- **Supported Dialects:** PostgreSQL (Production) and SQLite (Development/Testing).
+- **Core Models:** Users, Projects, Missions, Tasks, Events, Artifacts, Knowledge, Workflows, Audit Events.
 
-Owns authentication, request validation, authorization, project scoping, response contracts, correlation IDs, and error mapping.
+## Architectural Invariants
 
-### VMCF control plane
-
-Owns intent normalization, execution profile freezing, capability selection, deterministic strategy resolution, policy decisions, approvals, and mission control.
-
-### Execution fabric
-
-Owns work graphs, scheduling, task state, attempts, leases, cancellation, retries, agent cells, context building, gateways, result merging, and execution receipts.
-
-### Persistence
-
-Stores project-scoped missions, inputs, profiles, blueprints, tasks, attempts, decisions, approvals, artifacts, evidence, usage, errors, and audit events in PostgreSQL.
-
-## Invariants
-
-1. The frontend never orchestrates execution.
-2. Agents never call models or tools directly.
-3. Every tool call passes through the Tool Gateway.
-4. Every model call passes through the Model Gateway.
-5. Capability does not imply permission.
-6. Model and document content is untrusted until validated.
-7. Execution, retries, cost, and time are bounded.
-8. Project-scoped data cannot cross project boundaries.
-9. Important decisions and state changes are auditable.
-10. Human authority is above agent authority.
-
-## Current implementation
-
-Implemented: contracts, lifecycle validation, basic policy and strategy services, upload checks, SQLAlchemy model/session foundation, local SQLite runtime persistence for missions/users/projects, health endpoints, bearer auth, project access checks, public/auth/onboarding routes, and the protected frontend workspace.
-
-Not implemented: refresh-token/session persistence, PostgreSQL migrations wired to runtime, provider gateways, scheduler, durable artifact/audit persistence, and browser end-to-end execution.
+1. **Frontend Isolation:** The frontend never orchestrates execution.
+2. **Gateway Bottleneck:** Agents never call models or tools directly. Every call passes through the `ToolGateway` or `ModelGateway`.
+3. **Implicit Deny:** Capability does not imply permission. 
+4. **Untrusted Data:** Model and document content is treated as untrusted until validated.
+5. **Strict Bounding:** Execution, retries, cost, and time are strictly bounded.
+6. **Data Segregation:** Project-scoped data cannot cross project boundaries.
+7. **Auditability:** Important decisions and state changes are immutable and auditable.
+8. **Human Supremacy:** Human authority always supersedes agent authority.
