@@ -51,7 +51,7 @@ No IDs need to be copied, no database edits are required, and no mock response i
 
 ## Expected output
 
-A mission completes synchronously with `COMPLETED` mission/task state and a deterministic lexical analysis. Data is retained only until the backend process restarts.
+A mission completes synchronously with `COMPLETED` mission/task state and a deterministic lexical analysis. Local mission, user, and project state is retained in the SQLite file configured by `RUNTIME_DB_PATH`.
 
 ## Common errors and recovery
 
@@ -59,7 +59,7 @@ A mission completes synchronously with `COMPLETED` mission/task state and a dete
 - Frontend targets the wrong API: set `NEXT_PUBLIC_API_BASE_URL` before `npm run dev`.
 - Mixed file/text input: provide both files or both text fields.
 - Invalid/empty/unsupported file: use readable PDF, DOCX, TXT, or Markdown with text.
-- No missions after restart: expected; the store is in memory. Run the demo again.
+- Missing missions after restart: confirm `RUNTIME_DB_PATH` points to the same local SQLite file and that the backend process can write to its parent directory.
 
 ## Cleanup
 

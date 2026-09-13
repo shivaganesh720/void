@@ -15,18 +15,18 @@ Automation systems need policy, validation, evidence, and visible execution stat
 - FastAPI liveness/readiness and typed API contracts.
 - Safe bounded PDF, DOCX, TXT, and Markdown input handling.
 - Deterministic skill matching, defects, recommendations, and source-labelled evidence.
-- In-memory mission list, detail, task, event timeline, filtering, and dashboard summary.
+- Local SQLite-backed mission, user, and project state for mission list, detail, task, event timeline, filtering, and dashboard summary.
 - Next.js interface with loading, empty, error, refresh, and truthful unavailable states.
 
 ## Architecture and workflow
 
-The frontend calls the FastAPI boundary. The API validates input, creates an in-memory mission, runs the synchronous Resume/JD workflow, validates the result, records lifecycle events, and returns the result. SQLAlchemy entity definitions describe a future PostgreSQL boundary but are not connected to runtime queries.
+The frontend calls the FastAPI boundary. The API validates input, creates a project-scoped mission, runs the synchronous Resume/JD workflow, validates the result, records lifecycle events, and persists the local development payload in SQLite. SQLAlchemy entity definitions still describe a future PostgreSQL repository boundary and are not connected to runtime queries.
 
 1. Open the local dashboard.
 2. Paste both documents or upload a supported pair.
 3. Start analysis and inspect the completed mission and result.
 4. Open Missions to filter and inspect task state and lifecycle events.
-5. Refresh or restart to observe the documented process-memory limitation.
+5. Refresh or restart to confirm local SQLite state survives the backend process restart; PostgreSQL durability and migration wiring remain deferred.
 
 See [docs/README.md](docs/README.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [docs/end-to-end-workflow.md](docs/end-to-end-workflow.md).
 
@@ -47,7 +47,7 @@ Set-Location ..
 Copy-Item .env.example .env
 ```
 
-The current runtime reads `ENVIRONMENT`, `DATABASE_URL`, `RUNTIME_DB_PATH`, `MAX_UPLOAD_BYTES`, and `ALLOWED_ORIGINS`. Local missions use the SQLite path in `RUNTIME_DB_PATH` (default `.local/void.sqlite3`); `DATABASE_URL` remains reserved for the future authenticated PostgreSQL repository. The frontend optionally reads `NEXT_PUBLIC_API_BASE_URL` and otherwise uses `http://127.0.0.1:8000`.
+The current runtime reads `ENVIRONMENT`, `DATABASE_URL`, `RUNTIME_DB_PATH`, `MAX_UPLOAD_BYTES`, and `ALLOWED_ORIGINS`. Local missions, users, and projects use the SQLite path in `RUNTIME_DB_PATH` (default `.local/void.sqlite3`); `DATABASE_URL` remains reserved for the future authenticated PostgreSQL repository. The frontend optionally reads `NEXT_PUBLIC_API_BASE_URL` and otherwise uses `http://127.0.0.1:8000`.
 
 ## Run and test
 
@@ -74,7 +74,7 @@ Follow [docs/demo-runbook.md](docs/demo-runbook.md). No screenshots are committe
 
 ## Security and limitations
 
-Upload validation, output validation, CORS configuration, safe logging, bearer authentication, and project membership checks are covered in the current slice. Refresh-token rotation, durable identity storage, email delivery, and production deployment hardening remain deferred. See [docs/security-model.md](docs/security-model.md) and [docs/REQUIREMENT_STATUS.md](docs/REQUIREMENT_STATUS.md).
+Upload validation, output validation, CORS configuration, safe logging, bearer authentication, project membership checks, and local SQLite identity storage are covered in the current slice. Refresh-token rotation, PostgreSQL identity storage, email delivery, and production deployment hardening remain deferred. See [docs/security-model.md](docs/security-model.md) and [docs/REQUIREMENT_STATUS.md](docs/REQUIREMENT_STATUS.md).
 
 ## Project structure
 

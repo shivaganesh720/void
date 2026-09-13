@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -14,8 +16,8 @@ def _register(client, email, password):
 
 def test_auth_registration_login_and_project_isolation() -> None:
     client = TestClient(app)
-    user_a = _register(client, "alice@example.com", "secretpass123")
-    user_b = _register(client, "bob@example.com", "secretpass123")
+    user_a = _register(client, f"alice-{uuid4()}@example.com", "secretpass123")
+    user_b = _register(client, f"bob-{uuid4()}@example.com", "secretpass123")
 
     token_a = client.post(
         "/api/v1/auth/login",
@@ -56,7 +58,7 @@ def test_auth_registration_login_and_project_isolation() -> None:
 
 def test_execution_profile_and_explanation_report_are_returned() -> None:
     client = TestClient(app)
-    user = _register(client, "charlie@example.com", "secretpass123")
+    user = _register(client, f"charlie-{uuid4()}@example.com", "secretpass123")
     token = client.post(
         "/api/v1/auth/login",
         json={"email": user["email"], "password": "secretpass123"},

@@ -37,6 +37,24 @@ class RuntimeStore:
             )
             connection.execute("CREATE INDEX IF NOT EXISTS ix_missions_project_id ON missions(project_id)")
             connection.execute("CREATE INDEX IF NOT EXISTS ix_missions_updated_at ON missions(updated_at)")
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS projects (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute("CREATE INDEX IF NOT EXISTS ix_projects_owner_id ON projects(owner_id)")
 
     def save(self, payload: dict[str, Any]) -> None:
         mission_id = str(payload["id"])
@@ -59,6 +77,37 @@ class RuntimeStore:
     def load_all(self) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute("SELECT payload FROM missions ORDER BY updated_at DESC").fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+    def save_user(self, payload: dict[str, Any]) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO users (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                (str(payload["id"]), json.dumps(payload, default=json_default, separators=(",", ":"), sort_keys=True)),
+            )
+
+    def load_users(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT payload FROM users ORDER BY id").fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+    def save_project(self, payload: dict[str, Any]) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO projects (id, owner_id, payload) VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET owner_id=excluded.owner_id, payload=excluded.payload
+                """,
+                (
+                    str(payload["id"]),
+                    str(payload["owner_id"]),
+                    json.dumps(payload, default=json_default, separators=(",", ":"), sort_keys=True),
+                ),
+            )
+
+    def load_projects(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT payload FROM projects ORDER BY id").fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
 

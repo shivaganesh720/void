@@ -202,6 +202,7 @@ def _require_project_access(project_id: UUID, user: StoredUser) -> None:
         if user.id == DEFAULT_DEMO_USER_ID:
             project = StoredProject(id=project_id, name="Legacy Local Project", owner_id=user.id, members=[user.id])
             PROJECTS[project_id] = project
+            _persist_project(project)
             return
         raise HTTPException(status_code=404, detail="PROJECT_NOT_FOUND")
     if user.id != project.owner_id and user.id not in project.members:
@@ -213,6 +214,58 @@ def _project_members(project_id: UUID) -> list[UUID]:
     if project is None:
         return []
     return [project.owner_id, *project.members]
+
+
+def _user_payload(user: StoredUser) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "password_hash": user.password_hash,
+        "full_name": user.full_name,
+        "role": user.role,
+        "onboarding_completed": user.onboarding_completed,
+        "ai_awareness": user.ai_awareness,
+        "default_mode": user.default_mode,
+        "explanation_level": user.explanation_level,
+        "execution_priority": user.execution_priority,
+        "created_at": user.created_at,
+    }
+
+
+def _user_from_payload(payload: dict) -> StoredUser:
+    return StoredUser(
+        id=UUID(payload["id"]),
+        email=payload["email"],
+        password_hash=payload["password_hash"],
+        full_name=payload.get("full_name", ""),
+        role=payload.get("role", "USER"),
+        onboarding_completed=payload.get("onboarding_completed", False),
+        ai_awareness=payload.get("ai_awareness", "AI_UNAWARE"),
+        default_mode=payload.get("default_mode", "AUTO"),
+        explanation_level=payload.get("explanation_level", "STANDARD"),
+        execution_priority=payload.get("execution_priority", "QUALITY"),
+        created_at=datetime.fromisoformat(payload["created_at"]),
+    )
+
+
+def _project_payload(project: StoredProject) -> dict:
+    return {
+        "id": project.id,
+        "name": project.name,
+        "owner_id": project.owner_id,
+        "members": project.members,
+        "created_at": project.created_at,
+    }
+
+
+def _project_from_payload(payload: dict) -> StoredProject:
+    return StoredProject(
+        id=UUID(payload["id"]),
+        name=payload["name"],
+        owner_id=UUID(payload["owner_id"]),
+        members=[UUID(member) for member in payload.get("members", [])],
+        created_at=datetime.fromisoformat(payload["created_at"]),
+    )
 
 
 def _build_explanation_report(mission: StoredMission) -> dict:
@@ -345,8 +398,13 @@ def _approval_from_payload(payload: dict) -> StoredApproval:
 
 
 RUNTIME_STORE = RuntimeStore(settings.runtime_db_path)
-USERS[DEFAULT_DEMO_USER_ID] = StoredUser(id=DEFAULT_DEMO_USER_ID, email=DEFAULT_DEMO_USER_EMAIL, password_hash=_hash_password("demo-password"), role="USER")
-PROJECTS: dict[UUID, StoredProject] = {}
+USERS: dict[UUID, StoredUser] = {
+    user.id: user for user in (_user_from_payload(payload) for payload in RUNTIME_STORE.load_users())
+}
+USERS.setdefault(DEFAULT_DEMO_USER_ID, StoredUser(id=DEFAULT_DEMO_USER_ID, email=DEFAULT_DEMO_USER_EMAIL, password_hash=_hash_password("demo-password"), role="USER"))
+PROJECTS: dict[UUID, StoredProject] = {
+    project.id: project for project in (_project_from_payload(payload) for payload in RUNTIME_STORE.load_projects())
+}
 REPORTS: dict[UUID, dict] = {}
 MISSIONS: dict[UUID, StoredMission] = {
     mission.id: mission for mission in (_mission_from_payload(payload) for payload in RUNTIME_STORE.load_all())
@@ -355,6 +413,14 @@ MISSIONS: dict[UUID, StoredMission] = {
 
 def _persist_mission(mission: StoredMission) -> None:
     RUNTIME_STORE.save(_mission_payload(mission))
+
+
+def _persist_user(user: StoredUser) -> None:
+    RUNTIME_STORE.save_user(_user_payload(user))
+
+
+def _persist_project(project: StoredProject) -> None:
+    RUNTIME_STORE.save_project(_project_payload(project))
 
 
 def _record_event(mission: StoredMission, event_type: str, detail: str) -> None:
@@ -496,6 +562,7 @@ def register_user(payload: RegisterRequest) -> UserSummaryResponse:
             raise HTTPException(status_code=409, detail="USER_ALREADY_EXISTS")
     user = StoredUser(id=uuid4(), email=payload.email, password_hash=_hash_password(payload.password), full_name=payload.full_name.strip(), role="USER")
     USERS[user.id] = user
+    _persist_user(user)
     return UserSummaryResponse(id=user.id, email=user.email, role=user.role, full_name=user.full_name, onboarding_completed=user.onboarding_completed, created_at=user.created_at)
 
 
@@ -527,6 +594,7 @@ def update_profile(payload: ProfileUpdateRequest, authorization: str | None = He
     user.explanation_level = payload.explanation_level
     user.execution_priority = payload.execution_priority
     user.onboarding_completed = True
+    _persist_user(user)
     return UserSummaryResponse(id=user.id, email=user.email, role=user.role, full_name=user.full_name, onboarding_completed=user.onboarding_completed, created_at=user.created_at)
 
 
@@ -536,6 +604,7 @@ def create_project(payload: ProjectCreateRequest, authorization: str | None = He
     project_id = uuid4()
     project = StoredProject(id=project_id, name=payload.name, owner_id=user.id, members=[user.id])
     PROJECTS[project_id] = project
+    _persist_project(project)
     return ProjectResponse(id=project.id, name=project.name, owner_id=project.owner_id, members=project.members, created_at=project.created_at)
 
 

@@ -9,13 +9,13 @@
 
 | Check                     | Result                     |
 | ------------------------- | -------------------------- |
-| Backend unit tests        | 21 passed                  |
+| Backend unit tests        | 22 passed                  |
 | Frontend production build | Passed with Next.js 16.3.5 |
 | Frontend dependency audit | 0 vulnerabilities          |
 | Database migrations       | Not implemented            |
 | End-to-end mission        | Not implemented            |
 
-As of 2026-09-13, 21 backend unit tests pass, the frontend build passes across 10 routes, and backend tests emit two non-blocking FastAPI/Starlette test-client deprecation warnings.
+As of 2026-09-13, 22 backend unit tests pass, the frontend build passes across 10 routes, and backend tests emit two non-blocking FastAPI/Starlette test-client deprecation warnings.
 
 ## Implemented
 
@@ -35,11 +35,12 @@ As of 2026-09-13, 21 backend unit tests pass, the frontend build passes across 1
 - Public landing, registration, login, onboarding, recovery, verification, and protected workspace routes
 - Bearer-token auth, current-user/logout/profile endpoints, salted PBKDF2 password verification
 - User-owned project creation during onboarding and authenticated workspace mission requests
+- Local SQLite runtime persistence for mission payloads, registered users, and projects; this is a development boundary, not PostgreSQL storage
 
 ## Pending
 
 - Refresh-token rotation and durable session invalidation
-- PostgreSQL-backed project authorization and isolation enforcement
+- PostgreSQL-backed identity/session/project authorization and isolation enforcement
 - SQLAlchemy session wiring and Alembic migrations
 - Durable project/file/approval/artifact/audit APIs
 - Task State Service with leases, heartbeats, retries, and cancellation
