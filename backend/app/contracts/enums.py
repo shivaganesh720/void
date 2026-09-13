@@ -1,0 +1,53 @@
+from enum import StrEnum
+
+
+class ExecutionMode(StrEnum):
+    AUTO = "AUTO"
+    GUIDED = "GUIDED"
+    MANUAL = "MANUAL"
+
+
+class MissionStatus(StrEnum):
+    DRAFT = "DRAFT"
+    VALIDATING = "VALIDATING"
+    PLANNED = "PLANNED"
+    WAITING_FOR_APPROVAL = "WAITING_FOR_APPROVAL"
+    APPROVED = "APPROVED"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    CANCELLING = "CANCELLING"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    BLOCKED = "BLOCKED"
+    EXPIRED = "EXPIRED"
+
+
+class TaskStatus(StrEnum):
+    CREATED = "CREATED"
+    READY = "READY"
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    WAITING = "WAITING"
+    RETRYING = "RETRYING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    BLOCKED = "BLOCKED"
+    TIMED_OUT = "TIMED_OUT"
+
+
+class PolicyDecision(StrEnum):
+    ALLOW = "ALLOW"
+    LIMIT = "LIMIT"
+    REVIEW = "REVIEW"
+    APPROVAL = "APPROVAL"
+    BLOCK = "BLOCK"
+    ESCALATE = "ESCALATE"
+
+
+class RiskLevel(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"

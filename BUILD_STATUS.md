@@ -36,18 +36,17 @@ system policies, risk, privacy, quality, cost, and execution constraints.
 
 ## 2. CURRENT BUILD STATE
 
-**Current Phase:** Phase 0 - Repository Foundation
+**Current Phase:** Phase 1 - Contracts and initial foundation
 
 **Status:** IN PROGRESS
 
-**Overall Implementation:** 0%
+**Overall Implementation:** approximately 15% (partial; not production complete)
 
 **Last Verified:** 2026-09-11
 
 **Latest Commit:** None yet
 
-**Next Required Action:** Complete and verify repository documentation,
-then create the first Git checkpoint.
+**Next Required Action:** Add authenticated project-scoped persistence and mission/file APIs, then implement and test the complete Resume/JD execution slice.
 
 ---
 
