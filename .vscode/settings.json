@@ -1,6 +1,14 @@
 {
     "chat.tools.terminal.autoApprove": {
         "npm run build": true,
-        "npm run lint": true
+        "npm run lint": true,
+        "/^Set-Location \"C:\\\\Users\\\\nagur\\\\D_drive\\\\MyFolder\\\\projects\\\\void\\\\frontend\"; npm audit --audit-level=high$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^Set-Location \"C:\\\\Users\\\\nagur\\\\D_drive\\\\MyFolder\\\\projects\\\\void\\\\frontend\"; npm run build; npm audit --audit-level=high$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

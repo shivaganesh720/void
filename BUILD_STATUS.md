@@ -1,21 +1,21 @@
 # VOID Build Status
 
 **Verified:** 2026-09-13
-**Phase:** Contracts and initial foundation
+**Phase:** Local Resume/JD development slice with mission observability
 **Status:** PARTIALLY IMPLEMENTED
-**Estimated completion:** 15%
+**Estimated completion:** 30% of requested control-plane scope
 
 ## Verified checks
 
 | Check                     | Result                     |
 | ------------------------- | -------------------------- |
-| Backend unit tests        | 9 passed                   |
+| Backend unit tests        | 15 passed                  |
 | Frontend production build | Passed with Next.js 16.3.5 |
 | Frontend dependency audit | 0 vulnerabilities          |
 | Database migrations       | Not implemented            |
 | End-to-end mission        | Not implemented            |
 
-Backend tests emit two non-blocking FastAPI/Starlette test-client deprecation warnings.
+As of 2026-09-13, 15 backend unit tests pass, the frontend build passes, npm reports zero vulnerabilities, and backend health/readiness/OpenAPI checks return 200 when Uvicorn is running. Backend tests emit two non-blocking FastAPI/Starlette test-client deprecation warnings.
 
 ## Implemented
 
@@ -26,7 +26,10 @@ Backend tests emit two non-blocking FastAPI/Starlette test-client deprecation wa
 - Deterministic policy evaluation
 - Deterministic Resume/JD strategy selection
 - Basic upload validation
-- Resume/JD lexical analysis and source-labelled evidence
+- Resume/JD lexical analysis, structured validation, and source-labelled evidence
+- Bounded PDF/DOCX/text parsing
+- Project-filtered mission list/detail/task/event APIs
+- Dashboard summary and frontend mission timeline
 - Initial SQLAlchemy models for users, projects, members, missions, tasks, artifacts, and audit events
 - Next.js frontend presentation shell
 
@@ -35,8 +38,7 @@ Backend tests emit two non-blocking FastAPI/Starlette test-client deprecation wa
 - Authentication and session invalidation
 - Project authorization and isolation enforcement
 - SQLAlchemy session wiring and Alembic migrations
-- Mission, project, file, approval, artifact, and audit APIs
-- PDF and DOCX parsing
+- Durable project/file/approval/artifact/audit APIs
 - Task State Service with leases, heartbeats, retries, and cancellation
 - Model Gateway and real provider adapters
 - Tool Gateway and safe document tools

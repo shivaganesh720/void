@@ -74,7 +74,7 @@ export default function Home() {
 
   function selectView(nextView: View) {
     setView(nextView);
-    window.history.replaceState(null, "", `#${nextView}`);
+    window.location.hash = nextView;
   }
 
   async function loadDashboard() {

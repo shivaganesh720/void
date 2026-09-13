@@ -44,4 +44,4 @@ A feature may be labelled VERIFIED only with executable test evidence. Document 
 
 ## Current validation result
 
-As of 2026-09-13: 9 backend unit tests pass, the frontend build passes, and npm reports zero vulnerabilities. Two test-client deprecation warnings remain.
+As of 2026-09-13: 15 backend unit tests pass, the frontend build passes, npm reports zero vulnerabilities, and backend health/readiness/OpenAPI checks return 200 when Uvicorn is running. Two test-client deprecation warnings remain.

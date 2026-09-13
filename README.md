@@ -6,9 +6,9 @@ VOID is a governed execution system. It converts human intent into controlled wo
 
 ## Current status
 
-- Phase: contracts and initial foundation
-- Completion: partial, approximately 15%
-- Backend tests: 9 passing
+- Phase: local Resume/JD development slice with mission observability
+- Completion: partial, approximately 30% of the requested control-plane scope
+- Backend tests: 15 passing
 - Frontend build: passing
 - Frontend dependency audit: 0 vulnerabilities
 - Production readiness: not yet claimed
@@ -28,12 +28,12 @@ Not implemented yet:
 
 - Authentication and project authorization
 - Database sessions and Alembic migrations
-- Mission and file APIs
-- PDF/DOCX extraction
+- Durable mission and file APIs
+- Durable document persistence
 - Model Gateway, Tool Gateway, Agent Harness, scheduler, approvals, artifacts, and audit persistence
-- End-to-end mission execution
+- Worker-backed end-to-end mission execution
 
-The development Resume/JD text slice is now executable through `POST /api/v1/missions/resume-jd` and retrievable through `GET /api/v1/missions/{mission_id}`. It is synchronous, in-memory, and lexical-only; it does not provide durable persistence or model-backed execution. See [docs/void-final-implementation-report.md](docs/void-final-implementation-report.md).
+The development Resume/JD text and upload slice is executable through `POST /api/v1/missions/resume-jd` and `POST /api/v1/missions/resume-jd/upload`, retrievable through `GET /api/v1/missions/{mission_id}`, and observable through mission list/task/event APIs. It is synchronous, in-memory, and lexical-only; it does not provide durable persistence or model-backed execution. See [docs/void-final-implementation-report.md](docs/void-final-implementation-report.md).
 
 ## Requirements
 
