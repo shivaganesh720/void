@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,6 +22,31 @@ class MissionCreate(BaseModel):
     intent: str = Field(min_length=1, max_length=10_000)
     execution_mode: ExecutionMode = ExecutionMode.AUTO
     target_role: str | None = Field(default=None, max_length=300)
+
+
+class ResumeJdMissionCreate(BaseModel):
+    project_id: UUID = Field(default_factory=uuid4)
+    resume_text: str = Field(min_length=1, max_length=200_000)
+    job_description: str = Field(min_length=1, max_length=200_000)
+
+
+class TaskResponse(BaseModel):
+    id: UUID
+    mission_id: UUID
+    name: str
+    status: str
+    result: dict | None = None
+    error: str | None = None
+
+
+class MissionDetailResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    intent: str
+    status: MissionStatus
+    task: TaskResponse
+    result: dict | None = None
+    error: str | None = None
 
 
 class MissionResponse(BaseModel):

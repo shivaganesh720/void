@@ -33,6 +33,8 @@ Not implemented yet:
 - Model Gateway, Tool Gateway, Agent Harness, scheduler, approvals, artifacts, and audit persistence
 - End-to-end mission execution
 
+The development Resume/JD text slice is now executable through `POST /api/v1/missions/resume-jd` and retrievable through `GET /api/v1/missions/{mission_id}`. It is synchronous, in-memory, and lexical-only; it does not provide durable persistence or model-backed execution. See [docs/runtime-execution-debug-report.md](docs/runtime-execution-debug-report.md).
+
 ## Requirements
 
 - Windows PowerShell
