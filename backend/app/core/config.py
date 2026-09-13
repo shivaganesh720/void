@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     database_url: str = Field(default="postgresql+psycopg://void:change-me@localhost/void_db")
     runtime_db_path: str = ".local/void.sqlite3"
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: int = 30
+    db_pool_recycle: int = 1800
+    db_echo: bool = False
     max_upload_bytes: int = 10 * 1024 * 1024
     allowed_origins: list[str] = ["http://localhost:3000"]
 

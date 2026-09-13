@@ -47,7 +47,7 @@ Set-Location ..
 Copy-Item .env.example .env
 ```
 
-The current runtime reads `ENVIRONMENT`, `DATABASE_URL`, `RUNTIME_DB_PATH`, `MAX_UPLOAD_BYTES`, and `ALLOWED_ORIGINS`. Local missions, users, and projects use the SQLite path in `RUNTIME_DB_PATH` (default `.local/void.sqlite3`); `DATABASE_URL` remains reserved for the future authenticated PostgreSQL repository. The frontend optionally reads `NEXT_PUBLIC_API_BASE_URL` and otherwise uses `http://127.0.0.1:8000`.
+The current runtime reads `ENVIRONMENT`, `DATABASE_URL`, `RUNTIME_DB_PATH`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT`, `DB_POOL_RECYCLE`, `DB_ECHO`, `MAX_UPLOAD_BYTES`, and `ALLOWED_ORIGINS`. Local missions, users, and projects use the SQLite path in `RUNTIME_DB_PATH` (default `.local/void.sqlite3`), while `DATABASE_URL` can be set to PostgreSQL for durable backend work. The frontend optionally reads `NEXT_PUBLIC_API_BASE_URL` and otherwise uses `http://127.0.0.1:8000`.
 
 ## Run and test
 

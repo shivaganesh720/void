@@ -41,10 +41,15 @@ class LoginRequest(BaseModel):
 
 class AuthTokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user_id: UUID
     email: str
     role: str = "USER"
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=20, max_length=4096)
 
 
 class UserSummaryResponse(BaseModel):

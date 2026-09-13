@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.contracts.enums import ApprovalStatus, MissionStatus, TaskStatus
@@ -19,6 +19,7 @@ from app.contracts.schemas import (
     AuthTokenResponse,
     DashboardSummaryResponse,
     ExecutionProfileRequest,
+    RefreshTokenRequest,
     ExplanationReportResponse,
     HealthResponse,
     LoginRequest,
@@ -50,6 +51,8 @@ DEFAULT_DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000099")
 USERS: dict[UUID, StoredUser] = {}
 PROJECTS: dict[UUID, StoredProject] = {}
 REPORTS: dict[UUID, dict] = {}
+ACTIVE_REFRESH_TOKENS: dict[UUID, set[str]] = {}
+REFRESH_TOKEN_USERS: dict[str, UUID] = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -148,14 +151,15 @@ def _verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 
-def _encode_token(user_id: UUID, email: str) -> str:
-    payload = {"sub": str(user_id), "email": email, "exp": (datetime.now(UTC) + timedelta(days=7)).timestamp()}
+def _encode_token(user_id: UUID, email: str, token_kind: str = "access", ttl: timedelta | None = None) -> str:
+    ttl = ttl or (timedelta(days=7) if token_kind == "refresh" else timedelta(hours=1))
+    payload = {"sub": str(user_id), "email": email, "kind": token_kind, "exp": (datetime.now(UTC) + ttl).timestamp()}
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii").rstrip("=")
     signature = hmac.new(SECRET_KEY, body.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{body}.{signature}"
 
 
-def _decode_token(token: str) -> tuple[UUID, str] | None:
+def _decode_token(token: str, token_kind: str | None = None) -> tuple[UUID, str] | None:
     try:
         signing_input, signature = token.split(".", 1)
     except ValueError:
@@ -170,10 +174,30 @@ def _decode_token(token: str) -> tuple[UUID, str] | None:
     exp = float(payload.get("exp", 0))
     if exp < datetime.now(UTC).timestamp():
         return None
+    if token_kind is not None and payload.get("kind") != token_kind:
+        return None
     try:
         return UUID(payload["sub"]), str(payload.get("email", DEFAULT_DEMO_USER_EMAIL))
     except (TypeError, ValueError):
         return None
+
+
+def _hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _issue_refresh_session(user_id: UUID, email: str) -> str:
+    refresh_token = _encode_token(user_id, email, token_kind="refresh", ttl=timedelta(days=30))
+    token_hash = _hash_refresh_token(refresh_token)
+    ACTIVE_REFRESH_TOKENS.setdefault(user_id, set()).add(token_hash)
+    REFRESH_TOKEN_USERS[token_hash] = user_id
+    return refresh_token
+
+
+def _revoke_refresh_sessions(user_id: UUID) -> None:
+    hashes = ACTIVE_REFRESH_TOKENS.pop(user_id, set())
+    for token_hash in hashes:
+        REFRESH_TOKEN_USERS.pop(token_hash, None)
 
 
 def _get_authenticated_user(authorization: str | None) -> StoredUser | None:
@@ -182,7 +206,7 @@ def _get_authenticated_user(authorization: str | None) -> StoredUser | None:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer":
         return None
-    decoded = _decode_token(token)
+    decoded = _decode_token(token, token_kind="access")
     if decoded is None:
         return None
     user_id, email = decoded
@@ -571,8 +595,34 @@ def login_user(payload: LoginRequest) -> AuthTokenResponse:
     user = next((candidate for candidate in USERS.values() if candidate.email.casefold() == payload.email.casefold()), None)
     if user is None or not _verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="INVALID_CREDENTIALS")
-    token = _encode_token(user.id, user.email)
-    return AuthTokenResponse(access_token=token, user_id=user.id, email=user.email, role=user.role)
+    access_token = _encode_token(user.id, user.email, token_kind="access", ttl=timedelta(hours=1))
+    refresh_token = _issue_refresh_session(user.id, user.email)
+    return AuthTokenResponse(access_token=access_token, refresh_token=refresh_token, user_id=user.id, email=user.email, role=user.role)
+
+
+@app.post("/api/v1/auth/refresh", response_model=AuthTokenResponse, tags=["auth"])
+def refresh_user_token(
+    payload: RefreshTokenRequest = Body(...),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> AuthTokenResponse:
+    user = _require_authenticated_user(authorization)
+    decoded = _decode_token(payload.refresh_token, token_kind="refresh")
+    if decoded is None:
+        raise HTTPException(status_code=401, detail="INVALID_REFRESH_TOKEN")
+    refresh_user_id, refresh_email = decoded
+    if refresh_user_id != user.id:
+        raise HTTPException(status_code=401, detail="INVALID_REFRESH_TOKEN")
+
+    token_hash = _hash_refresh_token(payload.refresh_token)
+    active_hashes = ACTIVE_REFRESH_TOKENS.get(user.id, set())
+    if token_hash not in active_hashes:
+        raise HTTPException(status_code=401, detail="REFRESH_TOKEN_REUSE_DETECTED")
+
+    active_hashes.discard(token_hash)
+    REFRESH_TOKEN_USERS.pop(token_hash, None)
+    new_access = _encode_token(user.id, user.email, token_kind="access", ttl=timedelta(hours=1))
+    new_refresh = _issue_refresh_session(user.id, refresh_email)
+    return AuthTokenResponse(access_token=new_access, refresh_token=new_refresh, user_id=user.id, email=user.email, role=user.role)
 
 
 @app.get("/api/v1/auth/me", response_model=UserSummaryResponse, tags=["auth"])
@@ -583,7 +633,8 @@ def current_user(authorization: str | None = Header(default=None, alias="Authori
 
 @app.post("/api/v1/auth/logout", status_code=204, tags=["auth"])
 def logout_user(authorization: str | None = Header(default=None, alias="Authorization")) -> None:
-    _require_authenticated_user(authorization)
+    user = _require_authenticated_user(authorization)
+    _revoke_refresh_sessions(user.id)
 
 
 @app.patch("/api/v1/auth/profile", response_model=UserSummaryResponse, tags=["auth"])
