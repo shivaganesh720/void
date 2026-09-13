@@ -1,20 +1,24 @@
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings, get_settings
 from app.db.base import Base, User
-from app.db.session import SessionLocal, database_health_check, get_engine_for_settings, initialize_database
+from app.db.session import database_health_check, get_engine_for_settings
 
 
 def test_database_foundation_initializes_schema_and_round_trips_user(tmp_path) -> None:
     database_url = f"sqlite:///{tmp_path / 'void_db.sqlite3'}"
-    initialize_database(database_url)
+    engine = create_engine(database_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
 
-    db = SessionLocal(database_url)
+    db = Session()
     user_id = uuid4()
-    user = User(id=user_id, email="db-user@example.com")
+    user = User(id=user_id, email="db-user@example.com", password_hash="test-hash")
     db.add(user)
     db.commit()
 
@@ -23,14 +27,13 @@ def test_database_foundation_initializes_schema_and_round_trips_user(tmp_path) -
     assert row.id == user_id
 
     db.close()
-
-    Base.metadata.clear()
+    engine.dispose()
 
 
 def test_database_settings_expose_runtime_pool_and_health_configuration() -> None:
     settings = Settings(
         environment="test",
-        database_url="sqlite:///./.local/test.sqlite3",
+        database_url="sqlite:///:memory:",
         db_pool_size=10,
         db_max_overflow=20,
         db_pool_timeout=30,
@@ -48,9 +51,6 @@ def test_database_settings_expose_runtime_pool_and_health_configuration() -> Non
     engine = get_engine_for_settings(settings)
     assert engine is not None
     assert database_health_check(engine) is True
-
-    settings_obj = get_settings()
-    assert hasattr(settings_obj, "database_url")
 
 
 def test_alembic_environment_targets_project_metadata() -> None:

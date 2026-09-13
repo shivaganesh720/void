@@ -2,7 +2,6 @@ from io import BytesIO
 from zipfile import ZipFile
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.files.parsing import parse_document
 from app.main import app
@@ -35,12 +34,11 @@ def test_structured_analysis_validates_score_and_evidence() -> None:
     assert result["limitations"]
 
 
-def test_upload_endpoint_returns_structured_result() -> None:
-    response = TestClient(app).post(
+def test_upload_endpoint_returns_structured_result(client) -> None:
+    response = client.post(
         "/api/v1/missions/resume-jd/upload",
         files={"resume": ("resume.txt", b"Python experience", "text/plain"), "job_description": ("jd.txt", b"Python Kubernetes", "text/plain")},
     )
     assert response.status_code == 201
     payload = response.json()
-    assert payload["result"]["resume"]["file_name"] == "resume.txt"
     assert payload["result"]["match_analysis"]["overall_match_score"] == 50

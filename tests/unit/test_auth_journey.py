@@ -1,12 +1,9 @@
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 
 
-def test_registration_profile_and_logout_journey() -> None:
-    client = TestClient(app)
+def test_registration_profile_and_logout_journey(client) -> None:
     email = f"journey-{uuid4()}@example.com"
     registered = client.post(
         "/api/v1/auth/register",
@@ -40,8 +37,7 @@ def test_registration_profile_and_logout_journey() -> None:
     assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
 
 
-def test_refresh_token_rotation_and_reuse_detection() -> None:
-    client = TestClient(app)
+def test_refresh_token_rotation_and_reuse_detection(client) -> None:
     email = f"refresh-{uuid4()}@example.com"
     client.post(
         "/api/v1/auth/register",
