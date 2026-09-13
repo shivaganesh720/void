@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_prefix: str = "/api/v1"
     database_url: str = Field(default="postgresql+psycopg://void:change-me@localhost/void_db")
+    runtime_db_path: str = ".local/void.sqlite3"
     max_upload_bytes: int = 10 * 1024 * 1024
     allowed_origins: list[str] = ["http://localhost:3000"]
 

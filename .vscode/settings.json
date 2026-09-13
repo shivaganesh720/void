@@ -9,6 +9,8 @@
         "/^Set-Location \"C:\\\\Users\\\\nagur\\\\D_drive\\\\MyFolder\\\\projects\\\\void\\\\frontend\"; npm run build; npm audit --audit-level=high$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "ForEach-Object": true,
+        "npm audit": true
     }
 }

@@ -10,6 +10,7 @@ from app.contracts.enums import MissionStatus, TaskStatus
 from app.contracts.schemas import DashboardSummaryResponse, HealthResponse, MissionDetailResponse, MissionEventResponse, MissionListResponse, ResumeJdMissionCreate, TaskResponse
 from app.control_plane.state import validate_transition
 from app.core.config import get_settings
+from app.db.runtime import RuntimeStore
 from app.files.parsing import ParsedDocument, parse_document
 from app.workflows.resume_jd import analyze_resume_against_jd
 from app.workflows.resume_jd_analysis import build_analysis, validate_analysis
@@ -53,14 +54,71 @@ class StoredMission:
     events: list[MissionEventResponse] = field(default_factory=list)
 
 
+def _mission_payload(mission: StoredMission) -> dict:
+    return {
+        "id": mission.id,
+        "project_id": mission.project_id,
+        "intent": mission.intent,
+        "status": mission.status.value,
+        "task": {
+            "id": mission.task.id,
+            "mission_id": mission.task.mission_id,
+            "name": mission.task.name,
+            "status": mission.task.status.value,
+            "result": mission.task.result,
+            "error": mission.task.error,
+        },
+        "result": mission.result,
+        "error": mission.error,
+        "execution_mode": mission.execution_mode,
+        "created_at": mission.created_at,
+        "updated_at": mission.updated_at,
+        "completed_at": mission.completed_at,
+        "events": [event.model_dump(mode="json") for event in mission.events],
+    }
+
+
+def _mission_from_payload(payload: dict) -> StoredMission:
+    task_payload = payload["task"]
+    task = StoredTask(
+        id=UUID(task_payload["id"]),
+        mission_id=UUID(task_payload["mission_id"]),
+        name=task_payload["name"],
+        status=TaskStatus(task_payload["status"]),
+        result=task_payload.get("result"),
+        error=task_payload.get("error"),
+    )
+    return StoredMission(
+        id=UUID(payload["id"]),
+        project_id=UUID(payload["project_id"]),
+        intent=payload["intent"],
+        status=MissionStatus(payload["status"]),
+        task=task,
+        result=payload.get("result"),
+        error=payload.get("error"),
+        execution_mode=payload.get("execution_mode", "AUTO"),
+        created_at=datetime.fromisoformat(payload["created_at"]),
+        updated_at=datetime.fromisoformat(payload["updated_at"]),
+        completed_at=datetime.fromisoformat(payload["completed_at"]) if payload.get("completed_at") else None,
+        events=[MissionEventResponse.model_validate(event) for event in payload.get("events", [])],
+    )
+
+
+RUNTIME_STORE = RuntimeStore(settings.runtime_db_path)
+MISSIONS: dict[UUID, StoredMission] = {
+    mission.id: mission for mission in (_mission_from_payload(payload) for payload in RUNTIME_STORE.load_all())
+}
+
+
+def _persist_mission(mission: StoredMission) -> None:
+    RUNTIME_STORE.save(_mission_payload(mission))
+
+
 def _record_event(mission: StoredMission, event_type: str, detail: str) -> None:
     timestamp = datetime.now(UTC)
     mission.updated_at = timestamp
     mission.events.append(MissionEventResponse(id=uuid4(), mission_id=mission.id, event_type=event_type, timestamp=timestamp, detail=detail))
-
-
-# This is deliberately an explicit development store until SQLAlchemy sessions and migrations exist.
-MISSIONS: dict[UUID, StoredMission] = {}
+    _persist_mission(mission)
 
 
 def _task_response(task: StoredTask) -> TaskResponse:
@@ -206,6 +264,7 @@ async def create_resume_jd_upload_mission(
         mission.result["resume"]["file_name"] = resume_document.file_name
         mission.result["job_description"]["file_name"] = jd_document.file_name
         mission.result["warnings"] = list(set(mission.result["warnings"]) | set(resume_document.warnings) | set(jd_document.warnings))
+        _persist_mission(mission)
     return _mission_response(mission)
 
 

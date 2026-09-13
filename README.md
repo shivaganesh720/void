@@ -1,109 +1,87 @@
 # VOID
 
-Versatile Orchestrated Intelligent Dispatcher.
+**Versatile Orchestrated Intelligent Dispatcher**: a governed local execution prototype with a bounded Resume/JD analysis workflow.
 
-VOID is a governed execution system. It converts human intent into controlled work while keeping policy, permissions, validation, evidence, and auditability outside the authority of models and agents.
+## Status
 
-## Current status
+VOID currently delivers a deterministic, lexical Resume/JD development slice with mission observability. It is suitable for a local demonstration and portfolio review. It is **not production-ready**: authentication, durable persistence, workers, model providers, approvals, artifacts, retries, cancellation, and deployment hardening are not implemented.
 
-- Phase: local Resume/JD development slice with mission observability
-- Completion: partial, approximately 30% of the requested control-plane scope
-- Backend tests: 15 passing
-- Frontend build: passing
-- Frontend dependency audit: 0 vulnerabilities
-- Production readiness: not yet claimed
+## Problem and solution
 
-Implemented now:
+Automation systems need policy, validation, evidence, and visible execution state outside model authority. VOID explores that control-plane shape. The implemented slice accepts resume and job-description text or files, validates and parses them, compares skills deterministically, validates structured output, and exposes mission, task, and event state.
 
-- FastAPI liveness and readiness endpoints
-- Typed execution modes, mission states, task states, policy decisions, and API schemas
-- Central lifecycle transition validation
-- Deterministic policy and Resume/JD strategy services
-- Basic safe upload validation
-- Lexical Resume/JD skill comparison with source-labelled evidence
-- PostgreSQL-ready SQLAlchemy models
-- Next.js mission-control presentation shell
+## Key features
 
-Not implemented yet:
+- FastAPI liveness/readiness and typed API contracts.
+- Safe bounded PDF, DOCX, TXT, and Markdown input handling.
+- Deterministic skill matching, defects, recommendations, and source-labelled evidence.
+- In-memory mission list, detail, task, event timeline, filtering, and dashboard summary.
+- Next.js interface with loading, empty, error, refresh, and truthful unavailable states.
 
-- Authentication and project authorization
-- Database sessions and Alembic migrations
-- Durable mission and file APIs
-- Durable document persistence
-- Model Gateway, Tool Gateway, Agent Harness, scheduler, approvals, artifacts, and audit persistence
-- Worker-backed end-to-end mission execution
+## Architecture and workflow
 
-The development Resume/JD text and upload slice is executable through `POST /api/v1/missions/resume-jd` and `POST /api/v1/missions/resume-jd/upload`, retrievable through `GET /api/v1/missions/{mission_id}`, and observable through mission list/task/event APIs. It is synchronous, in-memory, and lexical-only; it does not provide durable persistence or model-backed execution. See [docs/void-final-implementation-report.md](docs/void-final-implementation-report.md).
+The frontend calls the FastAPI boundary. The API validates input, creates an in-memory mission, runs the synchronous Resume/JD workflow, validates the result, records lifecycle events, and returns the result. SQLAlchemy entity definitions describe a future PostgreSQL boundary but are not connected to runtime queries.
 
-## Requirements
+1. Open the local dashboard.
+2. Paste both documents or upload a supported pair.
+3. Start analysis and inspect the completed mission and result.
+4. Open Missions to filter and inspect task state and lifecycle events.
+5. Refresh or restart to observe the documented process-memory limitation.
 
-- Windows PowerShell
-- Python 3.14 or compatible Python 3.x
-- Node.js and npm
-- PostgreSQL is optional for the current health and unit-test slice
+See [docs/architecture-overview.md](docs/architecture-overview.md) and [docs/end-to-end-workflow.md](docs/end-to-end-workflow.md).
 
-## Backend commands
+## Technology stack
 
-Run from the repository root:
+Python 3.x, FastAPI, Pydantic Settings, Uvicorn, SQLAlchemy model definitions, pypdf, pytest, Next.js 16, React 19, TypeScript, and npm.
+
+## Installation and environment
+
+Windows PowerShell is the verified local path. From the repository root:
 
 ```powershell
+py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-$env:PYTHONPATH = "backend"
-.\.venv\Scripts\python.exe -m pytest tests\unit -q
+Set-Location frontend
+npm install
+Set-Location ..
+Copy-Item .env.example .env
 ```
 
-Start the backend:
+The current runtime reads `ENVIRONMENT`, `DATABASE_URL`, `RUNTIME_DB_PATH`, `MAX_UPLOAD_BYTES`, and `ALLOWED_ORIGINS`. Local missions use the SQLite path in `RUNTIME_DB_PATH` (default `.local/void.sqlite3`); `DATABASE_URL` remains reserved for the future authenticated PostgreSQL repository. The frontend optionally reads `NEXT_PUBLIC_API_BASE_URL` and otherwise uses `http://127.0.0.1:8000`.
+
+## Run and test
+
+Backend:
 
 ```powershell
 $env:PYTHONPATH = "backend"
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open:
-
-- http://127.0.0.1:8000/health/live
-- http://127.0.0.1:8000/health/ready
-- http://127.0.0.1:8000/docs
-
-## Frontend commands
+Frontend, in another PowerShell window:
 
 ```powershell
 Set-Location frontend
-npm install
+$env:NEXT_PUBLIC_API_BASE_URL = "http://127.0.0.1:8000"
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open `http://localhost:3000`. Verify with `$env:PYTHONPATH="backend"; .\.venv\Scripts\python.exe -m pytest tests\unit -q`, `npm run build`, and `npm audit` from `frontend`.
 
-Verify the production bundle and dependencies:
+## Demo and screenshots
 
-```powershell
-npm run build
-npm audit
-```
+Follow [docs/demo-runbook.md](docs/demo-runbook.md). No screenshots are committed yet; the runbook identifies the dashboard, completed result, and mission timeline views to capture for a portfolio presentation.
 
-## Repository map
+## Security and limitations
 
-```text
-backend/app/       FastAPI application and domain services
-tests/unit/        Backend unit tests
-frontend/          Next.js presentation shell
-docs/              Audits, progress, reports, and security notes
-.env.example       Environment variable template
-```
+Upload validation, output validation, CORS configuration, safe logging, and project-filter behavior are covered in the current slice. There is no authentication or server-enforced membership, so client-supplied project IDs are not authorization. Data is process memory and disappears on restart. See [docs/security-model.md](docs/security-model.md) and [docs/void-known-limitations.md](docs/void-known-limitations.md).
 
-## Documentation
+## Project structure
 
-- [BUILD_STATUS.md](BUILD_STATUS.md): current verified state
-- [ARCHITECTURE.md](ARCHITECTURE.md): system boundaries and invariants
-- [VOID_SPEC.md](VOID_SPEC.md): target requirements and non-goals
-- [SECURITY_RULES.md](SECURITY_RULES.md): security rules
-- [docs/void-complete-implementation-audit.md](docs/void-complete-implementation-audit.md): repository audit
-- [docs/void-feature-status-matrix.md](docs/void-feature-status-matrix.md): feature classifications
-- [docs/void-final-implementation-report.md](docs/void-final-implementation-report.md): current report
-- [docs/void-api-reference.md](docs/void-api-reference.md): active API surface
-- [docs/void-known-limitations.md](docs/void-known-limitations.md): current limitations
+`backend/app` contains the API, contracts, control-plane helpers, parsing, and workflow. `frontend` contains the Next.js presentation shell. `tests/unit` contains backend tests. `docs` contains release, architecture, security, testing, and limitation reports.
 
-## Important rule
+## Roadmap and contribution
 
-Code is not complete merely because it exists. A feature is complete only when it is executable, tested, documented, and compliant with the governance and security rules.
+The next release prerequisites are authenticated identity and project membership, database sessions/migrations/repositories, durable mission state, a worker contract, and integration/browser tests. Do not present planned control-plane components as implemented. Contributions should preserve the boundaries in [DEVELOPMENT_RULES.md](DEVELOPMENT_RULES.md) and update the relevant status report.
+
+Author and contribution attribution should be added by the project owner before public publication.
