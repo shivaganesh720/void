@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.contracts.enums import ApprovalStatus, ExecutionMode, MissionStatus, ModelMode, PolicyDecision, RiskLevel
+from app.contracts.enums import ApprovalStatus, ExecutionMode, IntentType, MissionStatus, ModelMode, PolicyDecision, RiskLevel, StrategyType
 
 
 class ExecutionProfileRequest(BaseModel):
@@ -201,6 +201,23 @@ class DashboardSummaryResponse(BaseModel):
     recent_missions: list[MissionListResponse]
 
 
+class AdminOverviewResponse(BaseModel):
+    user_count: int
+    admin_count: int
+    auditor_count: int
+    project_count: int
+    mission_count: int
+
+
+class AdminUserResponse(BaseModel):
+    id: UUID
+    email: str
+    role: str
+    full_name: str = ""
+    onboarding_completed: bool = False
+    created_at: datetime | None = None
+
+
 class MissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -217,3 +234,123 @@ class PolicyDecisionResponse(BaseModel):
     reason: str
     risk_level: RiskLevel
     approval_required: bool
+
+
+class MissionRequest(BaseModel):
+    project_id: UUID | None = None
+    intent: str = Field(min_length=1, max_length=10_000)
+    intent_type: IntentType = IntentType.GENERAL_ASSISTANCE
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
+    strategy: StrategyType | None = None
+    entities: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    required_capabilities: list[str] = Field(default_factory=list)
+    approval_required: bool = False
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+    context: dict = Field(default_factory=dict)
+    input_files: list[str] = Field(default_factory=list)
+
+
+class MissionContext(BaseModel):
+    project_id: UUID | None = None
+    user_id: UUID | None = None
+    requested_by: str | None = None
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
+    privacy_mode: str = "STANDARD"
+    budget_limit: float | None = None
+    time_limit_seconds: int | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class CapabilityDescriptor(BaseModel):
+    name: str
+    slug: str
+    version: str = "1.0"
+    description: str = ""
+    required_models: list[str] = Field(default_factory=list)
+    required_tools: list[str] = Field(default_factory=list)
+    supported_file_types: list[str] = Field(default_factory=list)
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+    privacy_level: str = "STANDARD"
+    enabled: bool = True
+    validation_requirements: list[str] = Field(default_factory=list)
+
+
+class CapabilityRequest(BaseModel):
+    intent: str
+    intent_type: IntentType = IntentType.GENERAL_ASSISTANCE
+    required_capabilities: list[str] = Field(default_factory=list)
+    requested_tools: list[str] = Field(default_factory=list)
+    file_types: list[str] = Field(default_factory=list)
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+
+
+class ExecutionPlan(BaseModel):
+    strategy: StrategyType
+    workflow_id: str
+    steps: list[str] = Field(default_factory=list)
+    requires_approval: bool = False
+    rationale: str = ""
+
+
+class MissionBlueprint(BaseModel):
+    mission_id: UUID | None = None
+    intent: str
+    intent_type: IntentType
+    strategy: StrategyType
+    capabilities: list[str] = Field(default_factory=list)
+    plan: ExecutionPlan | None = None
+
+
+class TaskDefinition(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    name: str
+    task_type: str = "generic"
+    dependencies: list[UUID] = Field(default_factory=list)
+    required_capabilities: list[str] = Field(default_factory=list)
+    timeout_seconds: int | None = None
+    retry_limit: int = 0
+
+
+class TaskState(BaseModel):
+    id: UUID
+    name: str
+    status: str = "CREATED"
+    retry_count: int = 0
+    error: str | None = None
+    result: dict | None = None
+
+
+class ValidationResult(BaseModel):
+    valid: bool
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class EvidenceRecord(BaseModel):
+    source: str
+    title: str
+    excerpt: str = ""
+    confidence: float = 0.0
+    relevance: float = 0.0
+    page_number: int | None = None
+
+
+class CostRecord(BaseModel):
+    amount: float = 0.0
+    currency: str = "USD"
+    source: str = "internal"
+
+
+class MemoryRecord(BaseModel):
+    key: str
+    value: str
+    project_id: UUID | None = None
+    approved: bool = False
+
+
+class KnowledgeRecord(BaseModel):
+    title: str
+    source: str
+    content: str = ""
+    project_id: UUID | None = None

@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.contracts.enums import ApprovalStatus, MissionStatus, TaskStatus
 from app.contracts.schemas import (
+    AdminOverviewResponse,
+    AdminUserResponse,
     ApprovalDecisionUpdate,
     ApprovalRequest,
     ApprovalResponse,
@@ -38,6 +40,7 @@ from app.control_plane.state import validate_transition
 from app.core.config import get_settings
 from app.db.runtime import RuntimeStore
 from app.files.parsing import ParsedDocument, parse_document
+from app.governance.admin import AdminAccessPolicy, Role
 from app.workflows.resume_jd import analyze_resume_against_jd
 from app.workflows.resume_jd_analysis import build_analysis, validate_analysis
 
@@ -768,6 +771,42 @@ def dashboard_summary(
         blocked_missions=sum(mission.status == MissionStatus.BLOCKED for mission in missions),
         recent_missions=[_mission_list_response(mission) for mission in sorted(missions, key=lambda item: item.created_at, reverse=True)[:5]],
     )
+
+
+@app.get("/api/v1/admin/overview", response_model=AdminOverviewResponse, tags=["admin"])
+def admin_overview(authorization: str | None = Header(default=None, alias="Authorization")) -> AdminOverviewResponse:
+    user = _require_authenticated_user(authorization)
+    if not AdminAccessPolicy().can_access(user.role, Role.ADMIN):
+        raise HTTPException(status_code=403, detail="ADMIN_REQUIRED")
+
+    admin_count = sum(1 for candidate in USERS.values() if AdminAccessPolicy().can_access(candidate.role, Role.ADMIN))
+    auditor_count = sum(1 for candidate in USERS.values() if AdminAccessPolicy().can_access(candidate.role, Role.AUDITOR))
+    return AdminOverviewResponse(
+        user_count=len(USERS),
+        admin_count=admin_count,
+        auditor_count=auditor_count,
+        project_count=len(PROJECTS),
+        mission_count=len(MISSIONS),
+    )
+
+
+@app.get("/api/v1/admin/users", response_model=list[AdminUserResponse], tags=["admin"])
+def admin_users(authorization: str | None = Header(default=None, alias="Authorization")) -> list[AdminUserResponse]:
+    user = _require_authenticated_user(authorization)
+    if not AdminAccessPolicy().can_access(user.role, Role.ADMIN):
+        raise HTTPException(status_code=403, detail="ADMIN_REQUIRED")
+
+    return [
+        AdminUserResponse(
+            id=candidate.id,
+            email=candidate.email,
+            role=candidate.role,
+            full_name=candidate.full_name,
+            onboarding_completed=candidate.onboarding_completed,
+            created_at=candidate.created_at,
+        )
+        for candidate in sorted(USERS.values(), key=lambda item: item.created_at)
+    ]
 
 
 @app.get("/api/v1/missions/{mission_id}", response_model=MissionDetailResponse, tags=["missions"])
