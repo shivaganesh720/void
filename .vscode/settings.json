@@ -11,6 +11,11 @@
             "matchCommandLine": true
         },
         "ForEach-Object": true,
-        "npm audit": true
+        "npm audit": true,
+        "pytest": true,
+        "/^cd c:/Users/nagur/D_drive/MyFolder/projects/void/backend ; python -m pip install -r requirements\\.txt$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

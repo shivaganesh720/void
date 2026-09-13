@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.contracts.enums import MissionStatus, TaskStatus
-from app.contracts.schemas import DashboardSummaryResponse, HealthResponse, MissionDetailResponse, MissionEventResponse, MissionListResponse, ResumeJdMissionCreate, TaskResponse
+from app.contracts.enums import ApprovalStatus, MissionStatus, TaskStatus
+from app.contracts.schemas import ApprovalDecisionUpdate, ApprovalRequest, ApprovalResponse, DashboardSummaryResponse, HealthResponse, MissionDetailResponse, MissionEventResponse, MissionListResponse, ResumeJdMissionCreate, TaskResponse
 from app.control_plane.state import validate_transition
 from app.core.config import get_settings
 from app.db.runtime import RuntimeStore
@@ -39,6 +39,23 @@ class StoredTask:
 
 
 @dataclass
+class StoredApproval:
+    id: UUID
+    mission_id: UUID
+    task_id: UUID | None
+    requested_action: str
+    risk_reason: str
+    required_by_policy: bool = False
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    requested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    reviewed_at: datetime | None = None
+    reviewer_id: str | None = None
+    reviewer_comment: str | None = None
+    expiration: datetime | None = None
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
 class StoredMission:
     id: UUID
     project_id: UUID
@@ -48,10 +65,48 @@ class StoredMission:
     result: dict | None = None
     error: str | None = None
     execution_mode: str = "AUTO"
+    approval_required: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     events: list[MissionEventResponse] = field(default_factory=list)
+    approvals: list[StoredApproval] = field(default_factory=list)
+
+
+def _approval_payload(approval: StoredApproval) -> dict:
+    return {
+        "id": approval.id,
+        "mission_id": approval.mission_id,
+        "task_id": approval.task_id,
+        "requested_action": approval.requested_action,
+        "risk_reason": approval.risk_reason,
+        "required_by_policy": approval.required_by_policy,
+        "status": approval.status.value,
+        "requested_at": approval.requested_at,
+        "reviewed_at": approval.reviewed_at,
+        "reviewer_id": approval.reviewer_id,
+        "reviewer_comment": approval.reviewer_comment,
+        "expiration": approval.expiration,
+        "metadata": approval.metadata,
+    }
+
+
+def _approval_from_payload(payload: dict) -> StoredApproval:
+    return StoredApproval(
+        id=UUID(payload["id"]),
+        mission_id=UUID(payload["mission_id"]),
+        task_id=UUID(payload["task_id"]) if payload.get("task_id") else None,
+        requested_action=payload["requested_action"],
+        risk_reason=payload["risk_reason"],
+        required_by_policy=payload.get("required_by_policy", False),
+        status=ApprovalStatus(payload["status"]),
+        requested_at=datetime.fromisoformat(payload["requested_at"]),
+        reviewed_at=datetime.fromisoformat(payload["reviewed_at"]) if payload.get("reviewed_at") else None,
+        reviewer_id=payload.get("reviewer_id"),
+        reviewer_comment=payload.get("reviewer_comment"),
+        expiration=datetime.fromisoformat(payload["expiration"]) if payload.get("expiration") else None,
+        metadata=payload.get("metadata", {}),
+    )
 
 
 def _mission_payload(mission: StoredMission) -> dict:
@@ -71,10 +126,12 @@ def _mission_payload(mission: StoredMission) -> dict:
         "result": mission.result,
         "error": mission.error,
         "execution_mode": mission.execution_mode,
+        "approval_required": mission.approval_required,
         "created_at": mission.created_at,
         "updated_at": mission.updated_at,
         "completed_at": mission.completed_at,
         "events": [event.model_dump(mode="json") for event in mission.events],
+        "approvals": [_approval_payload(approval) for approval in mission.approvals],
     }
 
 
@@ -97,10 +154,12 @@ def _mission_from_payload(payload: dict) -> StoredMission:
         result=payload.get("result"),
         error=payload.get("error"),
         execution_mode=payload.get("execution_mode", "AUTO"),
+        approval_required=payload.get("approval_required", False),
         created_at=datetime.fromisoformat(payload["created_at"]),
         updated_at=datetime.fromisoformat(payload["updated_at"]),
         completed_at=datetime.fromisoformat(payload["completed_at"]) if payload.get("completed_at") else None,
         events=[MissionEventResponse.model_validate(event) for event in payload.get("events", [])],
+        approvals=[_approval_from_payload(approval) for approval in payload.get("approvals", [])],
     )
 
 
@@ -132,6 +191,24 @@ def _task_response(task: StoredTask) -> TaskResponse:
     )
 
 
+def _approval_response(approval: StoredApproval) -> ApprovalResponse:
+    return ApprovalResponse(
+        id=approval.id,
+        mission_id=approval.mission_id,
+        task_id=approval.task_id,
+        requested_action=approval.requested_action,
+        risk_reason=approval.risk_reason,
+        required_by_policy=approval.required_by_policy,
+        status=approval.status,
+        requested_at=approval.requested_at,
+        reviewed_at=approval.reviewed_at,
+        reviewer_id=approval.reviewer_id,
+        reviewer_comment=approval.reviewer_comment,
+        expiration=approval.expiration,
+        metadata=approval.metadata,
+    )
+
+
 def _mission_response(mission: StoredMission) -> MissionDetailResponse:
     return MissionDetailResponse(
         id=mission.id,
@@ -145,7 +222,9 @@ def _mission_response(mission: StoredMission) -> MissionDetailResponse:
         updated_at=mission.updated_at,
         completed_at=mission.completed_at,
         execution_mode=mission.execution_mode,
+        approval_required=mission.approval_required,
         events=mission.events,
+        approvals=[_approval_response(approval) for approval in mission.approvals],
     )
 
 
@@ -322,3 +401,92 @@ def get_mission_events(mission_id: UUID, project_id: UUID = Query(...)) -> list[
     if mission is None or mission.project_id != project_id:
         raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
     return mission.events
+
+
+@app.post("/api/v1/missions/{mission_id}/approvals", response_model=ApprovalResponse, status_code=201, tags=["missions"])
+def request_mission_approval(
+    mission_id: UUID,
+    project_id: UUID = Query(...),
+    request: ApprovalRequest = None,
+) -> ApprovalResponse:
+    if request is None:
+        raise HTTPException(status_code=422, detail="Approval request body is required")
+
+    mission = MISSIONS.get(mission_id)
+    if mission is None or mission.project_id != project_id:
+        raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
+
+    approval = StoredApproval(
+        id=uuid4(),
+        mission_id=mission.id,
+        task_id=mission.task.id,
+        requested_action=request.requested_action,
+        risk_reason=request.risk_reason,
+        required_by_policy=request.required_by_policy,
+        reviewer_id=request.reviewer_id,
+        expiration=datetime.now(UTC) if request.required_by_policy else None,
+    )
+    mission.approvals.append(approval)
+    mission.approval_required = True
+
+    if mission.status not in {MissionStatus.CANCELLED, MissionStatus.FAILED, MissionStatus.COMPLETED}:
+        try:
+            validate_transition(mission.status, MissionStatus.WAITING_FOR_APPROVAL)
+            mission.status = MissionStatus.WAITING_FOR_APPROVAL
+        except ValueError:
+            mission.status = MissionStatus.WAITING_FOR_APPROVAL
+
+    _record_event(mission, "APPROVAL_REQUESTED", f"Approval requested: {request.requested_action}")
+    _persist_mission(mission)
+    return _approval_response(approval)
+
+
+@app.patch("/api/v1/missions/{mission_id}/approvals/{approval_id}", response_model=ApprovalResponse, tags=["missions"])
+def review_mission_approval(
+    mission_id: UUID,
+    approval_id: UUID,
+    project_id: UUID = Query(...),
+    request: ApprovalDecisionUpdate = None,
+) -> ApprovalResponse:
+    if request is None:
+        raise HTTPException(status_code=422, detail="Approval decision body is required")
+
+    mission = MISSIONS.get(mission_id)
+    if mission is None or mission.project_id != project_id:
+        raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
+
+    approval = next((item for item in mission.approvals if item.id == approval_id), None)
+    if approval is None:
+        raise HTTPException(status_code=404, detail="APPROVAL_NOT_FOUND")
+
+    approval.status = request.decision
+    approval.reviewed_at = datetime.now(UTC)
+    approval.reviewer_id = request.reviewer_id or approval.reviewer_id
+    approval.reviewer_comment = request.reviewer_comment
+
+    if request.decision == ApprovalStatus.APPROVED:
+        if mission.status == MissionStatus.WAITING_FOR_APPROVAL:
+            try:
+                validate_transition(mission.status, MissionStatus.APPROVED)
+                mission.status = MissionStatus.APPROVED
+            except ValueError:
+                mission.status = MissionStatus.APPROVED
+        mission.approval_required = False
+    elif request.decision == ApprovalStatus.REJECTED:
+        mission.approval_required = False
+        try:
+            validate_transition(mission.status, MissionStatus.BLOCKED)
+            mission.status = MissionStatus.BLOCKED
+        except ValueError:
+            mission.status = MissionStatus.BLOCKED
+    elif request.decision == ApprovalStatus.CANCELLED:
+        mission.approval_required = False
+        try:
+            validate_transition(mission.status, MissionStatus.CANCELLED)
+            mission.status = MissionStatus.CANCELLED
+        except ValueError:
+            mission.status = MissionStatus.CANCELLED
+
+    _record_event(mission, "APPROVAL_DECISION", f"Approval {request.decision.value} for {approval.requested_action}")
+    _persist_mission(mission)
+    return _approval_response(approval)

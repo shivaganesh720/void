@@ -46,6 +46,14 @@ class PolicyDecision(StrEnum):
     ESCALATE = "ESCALATE"
 
 
+class ApprovalStatus(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
 class RiskLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"

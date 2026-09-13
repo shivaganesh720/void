@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.contracts.enums import ExecutionMode, MissionStatus, PolicyDecision, RiskLevel
+from app.contracts.enums import ApprovalStatus, ExecutionMode, MissionStatus, PolicyDecision, RiskLevel
 
 
 class HealthResponse(BaseModel):
@@ -48,6 +48,35 @@ class MissionEventResponse(BaseModel):
     detail: str
 
 
+class ApprovalRequest(BaseModel):
+    requested_action: str = Field(min_length=1, max_length=2000)
+    risk_reason: str = Field(min_length=1, max_length=2000)
+    required_by_policy: bool = False
+    reviewer_id: str | None = Field(default=None, max_length=300)
+
+
+class ApprovalDecisionUpdate(BaseModel):
+    decision: ApprovalStatus = ApprovalStatus.PENDING
+    reviewer_id: str | None = Field(default=None, max_length=300)
+    reviewer_comment: str | None = Field(default=None, max_length=4000)
+
+
+class ApprovalResponse(BaseModel):
+    id: UUID
+    mission_id: UUID
+    task_id: UUID | None = None
+    requested_action: str
+    risk_reason: str
+    required_by_policy: bool
+    status: ApprovalStatus
+    requested_at: datetime
+    reviewed_at: datetime | None = None
+    reviewer_id: str | None = None
+    reviewer_comment: str | None = None
+    expiration: datetime | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
 class MissionDetailResponse(BaseModel):
     id: UUID
     project_id: UUID
@@ -60,7 +89,9 @@ class MissionDetailResponse(BaseModel):
     updated_at: datetime | None = None
     completed_at: datetime | None = None
     execution_mode: ExecutionMode = ExecutionMode.AUTO
+    approval_required: bool = False
     events: list[MissionEventResponse] = Field(default_factory=list)
+    approvals: list[ApprovalResponse] = Field(default_factory=list)
 
 
 class MissionListResponse(BaseModel):
