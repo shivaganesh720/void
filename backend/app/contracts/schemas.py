@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,6 +40,14 @@ class TaskResponse(BaseModel):
     error: str | None = None
 
 
+class MissionEventResponse(BaseModel):
+    id: UUID
+    mission_id: UUID
+    event_type: str
+    timestamp: datetime
+    detail: str
+
+
 class MissionDetailResponse(BaseModel):
     id: UUID
     project_id: UUID
@@ -47,6 +56,30 @@ class MissionDetailResponse(BaseModel):
     task: TaskResponse
     result: dict | None = None
     error: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    completed_at: datetime | None = None
+    execution_mode: ExecutionMode = ExecutionMode.AUTO
+    events: list[MissionEventResponse] = Field(default_factory=list)
+
+
+class MissionListResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    intent: str
+    status: MissionStatus
+    task: TaskResponse
+    created_at: datetime
+
+
+class DashboardSummaryResponse(BaseModel):
+    project_id: UUID
+    total_missions: int
+    running_missions: int
+    completed_missions: int
+    failed_missions: int
+    blocked_missions: int
+    recent_missions: list[MissionListResponse]
 
 
 class MissionResponse(BaseModel):

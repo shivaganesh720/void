@@ -33,7 +33,7 @@ Not implemented yet:
 - Model Gateway, Tool Gateway, Agent Harness, scheduler, approvals, artifacts, and audit persistence
 - End-to-end mission execution
 
-The development Resume/JD text slice is now executable through `POST /api/v1/missions/resume-jd` and retrievable through `GET /api/v1/missions/{mission_id}`. It is synchronous, in-memory, and lexical-only; it does not provide durable persistence or model-backed execution. See [docs/runtime-execution-debug-report.md](docs/runtime-execution-debug-report.md).
+The development Resume/JD text slice is now executable through `POST /api/v1/missions/resume-jd` and retrievable through `GET /api/v1/missions/{mission_id}`. It is synchronous, in-memory, and lexical-only; it does not provide durable persistence or model-backed execution. See [docs/void-final-implementation-report.md](docs/void-final-implementation-report.md).
 
 ## Requirements
 
@@ -98,8 +98,11 @@ docs/              Audits, progress, reports, and security notes
 - [ARCHITECTURE.md](ARCHITECTURE.md): system boundaries and invariants
 - [VOID_SPEC.md](VOID_SPEC.md): target requirements and non-goals
 - [SECURITY_RULES.md](SECURITY_RULES.md): security rules
-- [docs/implementation-audit.md](docs/implementation-audit.md): repository audit
-- [docs/final-implementation-report.md](docs/final-implementation-report.md): current report
+- [docs/void-complete-implementation-audit.md](docs/void-complete-implementation-audit.md): repository audit
+- [docs/void-feature-status-matrix.md](docs/void-feature-status-matrix.md): feature classifications
+- [docs/void-final-implementation-report.md](docs/void-final-implementation-report.md): current report
+- [docs/void-api-reference.md](docs/void-api-reference.md): active API surface
+- [docs/void-known-limitations.md](docs/void-known-limitations.md): current limitations
 
 ## Important rule
 

@@ -4,98 +4,143 @@ import { useEffect, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const PROJECT_ID = "00000000-0000-0000-0000-000000000001";
+type View = "dashboard" | "missions" | "approvals" | "artifacts" | "settings";
+type Task = { id: string; name: string; status: string; result?: Record<string, unknown> | null; error?: string | null };
+type MissionEvent = { id: string; mission_id: string; event_type: string; timestamp: string; detail: string };
+type Analysis = {
+  resume: { file_name: string };
+  job_description: { file_name: string };
+  match_analysis: { overall_match_score: number; score_explanation: string; matching_skills: string[]; missing_skills: string[] };
+  defect_analysis: { resume_defects: { severity: string; issue: string }[] };
+  action_plan: { priority: number; action: string }[];
+  evidence: { source: string; quote: string }[];
+};
+type Mission = { id: string; project_id: string; intent: string; status: string; task: Task; created_at: string; updated_at?: string; completed_at?: string | null; execution_mode?: string; events?: MissionEvent[]; result?: Analysis | null; error?: string | null };
+type Summary = { project_id: string; total_missions: number; running_missions: number; completed_missions: number; failed_missions: number; blocked_missions: number; recent_missions: Mission[] };
 
-const surfaces = [
-  ["Mission control", "Create and supervise bounded work"],
-  ["Policy state", "Decisions remain server-authoritative"],
-  ["Evidence ledger", "Claims stay tied to source material"],
+const navigation: { id: View; label: string }[] = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "missions", label: "Missions" },
+  { id: "approvals", label: "Approvals" },
+  { id: "artifacts", label: "Artifacts" },
+  { id: "settings", label: "Settings" },
 ];
 
-type Mission = {
-  id: string;
-  status: string;
-  task: { status: string };
-  result?: {
-    resume: { file_name: string; summary: string; candidate_profile: { skills: string[] } };
-    job_description: { file_name: string; required_skills: string[]; keywords: string[] };
-    match_analysis: { overall_match_score: number; score_explanation: string; matching_skills: string[]; missing_skills: string[]; matching_keywords: string[]; missing_keywords: string[] };
-    defect_analysis: { resume_defects: { severity: string; issue: string; recommended_fix: string }[]; ats_defects: { issue: string }[] };
-    improvement_analysis: { high_priority: string[]; medium_priority: string[]; recommended_skill_improvements: string[] };
-    action_plan: { priority: number; action: string; reason: string; expected_benefit: string }[];
-    evidence: { source: string; quote: string; label: string }[];
-    limitations: string[];
-    warnings: string[];
-    matching_skills: string[];
-    missing_skills: string[];
-    overall_match_explanation: string;
-  };
-  error?: string;
-};
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.detail ?? "VOID API request failed");
+  return payload as T;
+}
+
+function EmptyState({ title, detail }: { title: string; detail: string }) {
+  return <section className="empty"><span className="empty-line" /><div><p className="eyebrow">EMPTY STATE</p><h2>{title}</h2><p className="muted">{detail}</p></div></section>;
+}
+
+function UnsupportedState({ feature }: { feature: string }) {
+  return <EmptyState title={`${feature} is not implemented yet`} detail={`VOID does not currently have a persisted ${feature.toLowerCase()} registry or API. This section is intentionally empty; no sample records or statistics are shown.`} />;
+}
+
+function AnalysisResult({ analysis }: { analysis: Analysis }) {
+  return <div className="analysis-grid">
+    <section><span className="eyebrow">MATCH SCORE</span><strong className="score">{analysis.match_analysis.overall_match_score}</strong><p>{analysis.match_analysis.score_explanation}</p></section>
+    <section><h3>Source files</h3><p>{analysis.resume.file_name}</p><p>{analysis.job_description.file_name}</p></section>
+    <section><h3>Matching skills</h3><p>{analysis.match_analysis.matching_skills.join(", ") || "None detected"}</p><h3>Missing skills</h3><p>{analysis.match_analysis.missing_skills.join(", ") || "None detected"}</p></section>
+    <section><h3>Defects</h3>{analysis.defect_analysis.resume_defects.map((defect) => <p className="warning" key={defect.issue}><b>{defect.severity}</b> {defect.issue}</p>)}</section>
+    <section><h3>Priority plan</h3>{analysis.action_plan.map((item) => <p key={item.priority}><b>{item.priority}.</b> {item.action}</p>)}</section>
+    <section><h3>Evidence</h3><p>{analysis.evidence.map((item) => `${item.source}: ${item.quote}`).join(" | ") || "No evidence detected"}</p></section>
+  </div>;
+}
 
 export default function Home() {
+  const [view, setView] = useState<View>("dashboard");
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [selectedMission, setSelectedMission] = useState<Mission | null>(null);
   const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdFile, setJdFile] = useState<File | null>(null);
   const [mission, setMission] = useState<Mission | null>(null);
   const [error, setError] = useState("");
+  const [dataError, setDataError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [missionSearch, setMissionSearch] = useState("");
+  const [missionStatus, setMissionStatus] = useState("");
+  const hasFilePair = Boolean(resumeFile && jdFile);
+  const hasTextPair = Boolean(resume.trim() && jobDescription.trim());
+  const hasMixedInputs = Boolean((resumeFile || jdFile) && !(resumeFile && jdFile));
 
+  function selectView(nextView: View) {
+    setView(nextView);
+    window.history.replaceState(null, "", `#${nextView}`);
+  }
+
+  async function loadDashboard() {
+    setLoading(true); setDataError("");
+    try { setSummary(await getJson<Summary>(`/api/v1/dashboard/summary?project_id=${PROJECT_ID}`)); }
+    catch (requestError) { setDataError(requestError instanceof Error ? requestError.message : "Dashboard request failed"); }
+    finally { setLoading(false); }
+  }
+
+  async function loadMissions() {
+    setLoading(true); setDataError("");
+    const params = new URLSearchParams({ project_id: PROJECT_ID });
+    if (missionSearch.trim()) params.set("search", missionSearch.trim());
+    if (missionStatus) params.set("status", missionStatus);
+    try { setMissions(await getJson<Mission[]>(`/api/v1/missions?${params.toString()}`)); }
+    catch (requestError) { setDataError(requestError instanceof Error ? requestError.message : "Mission request failed"); }
+    finally { setLoading(false); }
+  }
+
+  async function openMission(item: Mission) {
+    setDataError("");
+    try { setSelectedMission(await getJson<Mission>(`/api/v1/missions/${item.id}?project_id=${PROJECT_ID}`)); }
+    catch (requestError) { setDataError(requestError instanceof Error ? requestError.message : "Mission detail request failed"); }
+  }
+
+  useEffect(() => {
+    const updateFromHash = () => { const hash = window.location.hash.slice(1) as View; if (navigation.some((item) => item.id === hash)) setView(hash); };
+    updateFromHash(); window.addEventListener("hashchange", updateFromHash); return () => window.removeEventListener("hashchange", updateFromHash);
+  }, []);
+  useEffect(() => { void loadDashboard(); }, []);
+  useEffect(() => { if (view === "missions") void loadMissions(); }, [view, missionSearch, missionStatus]);
   useEffect(() => {
     if (!mission || ["COMPLETED", "FAILED", "BLOCKED"].includes(mission.status)) return;
     const timer = window.setInterval(async () => {
-      const response = await fetch(`${API_BASE}/api/v1/missions/${mission.id}`);
-      if (response.ok) setMission(await response.json());
+      try { setMission(await getJson<Mission>(`/api/v1/missions/${mission.id}?project_id=${PROJECT_ID}`)); }
+      catch { setError("Mission status could not be refreshed."); }
     }, 1000);
     return () => window.clearInterval(timer);
   }, [mission]);
 
   async function startMission() {
-    setSubmitting(true);
-    setError("");
-    setMission(null);
+    if (hasMixedInputs || (!hasFilePair && !hasTextPair)) { setError("Select both files, or provide both pasted text inputs."); return; }
+    setSubmitting(true); setError(""); setMission(null);
     try {
-      const body = resumeFile && jdFile ? (() => { const form = new FormData(); form.append("resume", resumeFile); form.append("job_description", jdFile); return form; })() : JSON.stringify({ project_id: PROJECT_ID, resume_text: resume, job_description: jobDescription });
-      const response = await fetch(`${API_BASE}/api/v1/missions/resume-jd${resumeFile && jdFile ? "/upload" : ""}`, { method: "POST", headers: resumeFile && jdFile ? undefined : { "Content-Type": "application/json" }, body });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail?.[0]?.msg ?? payload.detail ?? "Mission request failed");
-      setMission(payload);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Mission request failed");
-    } finally {
-      setSubmitting(false);
-    }
+      const body = hasFilePair ? (() => { const form = new FormData(); form.append("resume", resumeFile!); form.append("job_description", jdFile!); form.append("project_id", PROJECT_ID); return form; })() : JSON.stringify({ project_id: PROJECT_ID, resume_text: resume, job_description: jobDescription });
+      const response = await fetch(`${API_BASE}/api/v1/missions/resume-jd${hasFilePair ? "/upload" : ""}`, { method: "POST", headers: hasFilePair ? undefined : { "Content-Type": "application/json" }, body });
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.detail?.[0]?.msg ?? payload.detail ?? "Mission request failed");
+      setMission(payload); await loadDashboard();
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Mission request failed"); }
+    finally { setSubmitting(false); }
   }
 
-  return (
-    <main className="shell">
-      <aside className="rail">
-        <div className="mark">V<span>O</span>ID</div>
-        <nav aria-label="Primary navigation">
-          <a className="active" href="#dashboard">Dashboard</a>
-          <a href="#missions">Missions</a>
-          <a href="#approvals">Approvals</a>
-          <a href="#artifacts">Artifacts</a>
-          <a href="#settings">Settings</a>
-        </nav>
-        <div className="rail-foot">LOCAL / V1<br /><span>CONTROL PLANE ONLINE</span></div>
-      </aside>
-      <section className="content" id="dashboard">
-        <header className="topbar"><div><p className="eyebrow">VOID / OPERATIONS</p><h1>Mission control</h1></div><div className="health"><i /> API boundary healthy</div></header>
-        <section className="command">
-          <p className="eyebrow">UNIVERSAL COMMAND</p>
-          <h2>What should VOID govern next?</h2>
-          <p>Describe the outcome. Strategy, permissions, and execution remain under the control plane.</p>
-          <div className="inputs"><label>Resume file<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setResumeFile(event.target.files?.[0] ?? null)} /></label><label>Job description file<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setJdFile(event.target.files?.[0] ?? null)} /></label></div>
-          <p className="muted file-note">Or paste text for the bounded local analysis.</p><div className="inputs"><textarea aria-label="Resume" value={resume} onChange={(event) => setResume(event.target.value)} placeholder="Paste resume text" /><textarea aria-label="Job description" value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Paste job description" /></div>
-          <div className="command-row"><button type="button" onClick={startMission} disabled={submitting || !resume.trim() || !jobDescription.trim()}>{submitting ? "Starting..." : "Start analysis"} <span>↗</span></button></div>
-          {error && <p className="error" role="alert">{error}</p>}
-          {mission && <div className="mission-result"><p className="eyebrow">MISSION {mission.id}</p><p>Status: <strong>{mission.status}</strong> / Task: <strong>{mission.task.status}</strong></p>{mission.result && <div className="analysis-grid"><section><span className="eyebrow">MATCH SCORE</span><strong className="score">{mission.result.match_analysis.overall_match_score}</strong><p>{mission.result.match_analysis.score_explanation}</p></section><section><h3>Source files</h3><p>{mission.result.resume.file_name}</p><p>{mission.result.job_description.file_name}</p></section><section><h3>Matching skills</h3><p>{mission.result.match_analysis.matching_skills.join(", ") || "None detected"}</p><h3>Missing skills</h3><p>{mission.result.match_analysis.missing_skills.join(", ") || "None detected"}</p></section><section><h3>Defects</h3>{mission.result.defect_analysis.resume_defects.map((defect) => <p className="warning" key={defect.issue}><b>{defect.severity}</b> {defect.issue}</p>)}</section><section><h3>Priority plan</h3>{mission.result.action_plan.map((item) => <p key={item.priority}><b>{item.priority}.</b> {item.action}</p>)}</section><section><h3>Evidence</h3><p>{mission.result.evidence.map((item) => `${item.source}: ${item.quote}`).join(" | ") || "No evidence detected"}</p></section></div>}{mission.error && <p className="error">{mission.error}</p>}</div>}
-        </section>
-        <section className="overview"><div><p className="eyebrow">WORKSPACE</p><h2>Quiet systems. Traceable work.</h2><p className="muted">The first vertical slice is the Resume / JD intelligence workflow. No provider or external side effect is enabled by default.</p></div><div className="stat"><strong>0</strong><span>active missions</span></div><div className="stat"><strong>0</strong><span>pending approvals</span></div></section>
-        <section className="surface-grid">{surfaces.map(([title, detail], index) => <article className="surface" key={title}><span className="index">0{index + 1}</span><h3>{title}</h3><p>{detail}</p><span className="status">AVAILABLE IN FOUNDATION</span></article>)}</section>
-        <section className="empty"><span className="empty-line" /><div><p className="eyebrow">MISSION QUEUE</p><h2>No missions yet</h2><p className="muted">Create a mission to see its frozen execution profile, policy decisions, task graph, and evidence-backed artifacts here.</p></div></section>
-      </section>
-    </main>
-  );
+  return <main className="shell">
+    <aside className="rail"><div className="mark">V<span>O</span>ID</div><nav aria-label="Primary navigation">{navigation.map((item) => <a className={view === item.id ? "active" : ""} href={`#${item.id}`} onClick={() => setView(item.id)} key={item.id}>{item.label}</a>)}</nav><div className="rail-foot">LOCAL / V1<br /><span>CONTROL PLANE ONLINE</span></div></aside>
+    <section className="content">
+      <header className="topbar"><div><p className="eyebrow">VOID / OPERATIONS</p><h1>{navigation.find((item) => item.id === view)?.label}</h1></div><div className="health"><i /> API boundary {dataError ? "unavailable" : "healthy"}</div></header>
+      {dataError && <p className="error" role="alert">{dataError}</p>}
+      {view === "dashboard" && <>
+        <section className="command"><p className="eyebrow">RESUME / JD INTELLIGENCE</p><h2>Compare a resume with a job description.</h2><p>Run the bounded local analysis. Results are evidence-backed and do not call an external model provider.</p><div className="inputs"><label>Resume file<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setResumeFile(event.target.files?.[0] ?? null)} /></label><label>Job description file<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setJdFile(event.target.files?.[0] ?? null)} /></label></div><p className="muted file-note">Or paste text for the bounded local analysis.</p><div className="inputs"><textarea aria-label="Resume" value={resume} onChange={(event) => setResume(event.target.value)} placeholder="Paste resume text" /><textarea aria-label="Job description" value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Paste job description" /></div><div className="command-row"><button type="button" onClick={startMission} disabled={submitting || hasMixedInputs || (!hasFilePair && !hasTextPair)}>{submitting ? "Starting..." : "Start analysis"} <span>↗</span></button></div>{error && <p className="error" role="alert">{error}</p>}{mission && <div className="mission-result"><p className="eyebrow">MISSION {mission.id}</p><p>Status: <strong>{mission.status}</strong> / Task: <strong>{mission.task.status}</strong></p>{mission.result && <AnalysisResult analysis={mission.result} />}{mission.error && <p className="error">{mission.error}</p>}</div>}</section>
+        <section className="overview"><div><p className="eyebrow">WORKSPACE</p><h2>Current project activity</h2><p className="muted">Counts come from the project-scoped development mission store and reset when the API restarts.</p></div><div className="stat"><strong>{loading ? "-" : summary?.total_missions ?? 0}</strong><span>total missions</span></div><div className="stat"><strong>{loading ? "-" : summary?.running_missions ?? 0}</strong><span>running missions</span></div><div className="stat"><strong>{loading ? "-" : summary?.completed_missions ?? 0}</strong><span>completed missions</span></div><div className="stat"><strong>{loading ? "-" : summary?.failed_missions ?? 0}</strong><span>failed missions</span></div><div className="stat"><strong>{loading ? "-" : summary?.blocked_missions ?? 0}</strong><span>blocked missions</span></div></section>
+        {summary?.recent_missions.length ? <section className="recent"><p className="eyebrow">RECENT MISSIONS</p>{summary.recent_missions.map((item) => <button className="mission-row" key={item.id} onClick={() => { selectView("missions"); void openMission(item); }}><span>{item.intent}</span><b>{item.status}</b><small>{new Date(item.created_at).toLocaleString()}</small></button>)}</section> : !loading && <EmptyState title="No missions yet" detail="Start a Resume/JD Analysis mission to see activity here." />}
+      </>}
+      {view === "missions" && <section className="page-section"><div className="section-heading"><div><p className="eyebrow">PROJECT MISSIONS</p><h2>Mission history</h2></div><button type="button" onClick={() => void loadMissions()}>Refresh</button></div><div className="mission-filters"><input aria-label="Search missions" value={missionSearch} onChange={(event) => setMissionSearch(event.target.value)} placeholder="Search name or ID" /><select aria-label="Filter mission status" value={missionStatus} onChange={(event) => setMissionStatus(event.target.value)}><option value="">All statuses</option><option value="COMPLETED">Completed</option><option value="RUNNING">Running</option><option value="FAILED">Failed</option><option value="BLOCKED">Blocked</option></select></div>{loading && <p className="muted">Loading missions...</p>}{!loading && !missions.length && <EmptyState title="No matching missions" detail="Start a Resume/JD Analysis mission or adjust the current filters." />}{missions.map((item) => <button className="mission-row" key={item.id} onClick={() => void openMission(item)}><span>{item.intent}<small>{item.id}</small></span><b>{item.status}</b><small>{new Date(item.updated_at ?? item.created_at).toLocaleString()}</small></button>)}{selectedMission && <div className="mission-result"><p className="eyebrow">MISSION DETAIL</p><h2>{selectedMission.intent}</h2><p>{selectedMission.id}</p><p>Status: <strong>{selectedMission.status}</strong> / Task: <strong>{selectedMission.task.status}</strong></p><p className="muted">Execution mode: {selectedMission.execution_mode ?? "AUTO"} {selectedMission.completed_at ? `/ completed ${new Date(selectedMission.completed_at).toLocaleString()}` : ""}</p>{selectedMission.events?.length ? <div className="timeline"><h3>Event timeline</h3>{selectedMission.events.map((event) => <p key={event.id}><b>{event.event_type}</b> {event.detail}<small>{new Date(event.timestamp).toLocaleString()}</small></p>)}</div> : <p className="muted">No events recorded.</p>}{selectedMission.result && <AnalysisResult analysis={selectedMission.result} />}{selectedMission.error && <p className="error">{selectedMission.error}</p>}</div>}</section>}
+      {view === "approvals" && <UnsupportedState feature="Approvals" />}
+      {view === "artifacts" && <UnsupportedState feature="Artifacts" />}
+      {view === "settings" && <UnsupportedState feature="Settings" />}
+    </section>
+  </main>;
 }
