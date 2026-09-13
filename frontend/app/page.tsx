@@ -16,10 +16,18 @@ type Mission = {
   status: string;
   task: { status: string };
   result?: {
+    resume: { file_name: string; summary: string; candidate_profile: { skills: string[] } };
+    job_description: { file_name: string; required_skills: string[]; keywords: string[] };
+    match_analysis: { overall_match_score: number; score_explanation: string; matching_skills: string[]; missing_skills: string[]; matching_keywords: string[]; missing_keywords: string[] };
+    defect_analysis: { resume_defects: { severity: string; issue: string; recommended_fix: string }[]; ats_defects: { issue: string }[] };
+    improvement_analysis: { high_priority: string[]; medium_priority: string[]; recommended_skill_improvements: string[] };
+    action_plan: { priority: number; action: string; reason: string; expected_benefit: string }[];
+    evidence: { source: string; quote: string; label: string }[];
+    limitations: string[];
+    warnings: string[];
     matching_skills: string[];
     missing_skills: string[];
     overall_match_explanation: string;
-    warnings: string[];
   };
   error?: string;
 };
@@ -27,6 +35,8 @@ type Mission = {
 export default function Home() {
   const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [jdFile, setJdFile] = useState<File | null>(null);
   const [mission, setMission] = useState<Mission | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -45,11 +55,8 @@ export default function Home() {
     setError("");
     setMission(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/missions/resume-jd`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id: PROJECT_ID, resume_text: resume, job_description: jobDescription }),
-      });
+      const body = resumeFile && jdFile ? (() => { const form = new FormData(); form.append("resume", resumeFile); form.append("job_description", jdFile); return form; })() : JSON.stringify({ project_id: PROJECT_ID, resume_text: resume, job_description: jobDescription });
+      const response = await fetch(`${API_BASE}/api/v1/missions/resume-jd${resumeFile && jdFile ? "/upload" : ""}`, { method: "POST", headers: resumeFile && jdFile ? undefined : { "Content-Type": "application/json" }, body });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail?.[0]?.msg ?? payload.detail ?? "Mission request failed");
       setMission(payload);
@@ -79,10 +86,11 @@ export default function Home() {
           <p className="eyebrow">UNIVERSAL COMMAND</p>
           <h2>What should VOID govern next?</h2>
           <p>Describe the outcome. Strategy, permissions, and execution remain under the control plane.</p>
-          <div className="inputs"><textarea aria-label="Resume" value={resume} onChange={(event) => setResume(event.target.value)} placeholder="Paste resume text" /><textarea aria-label="Job description" value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Paste job description" /></div>
+          <div className="inputs"><label>Resume file<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setResumeFile(event.target.files?.[0] ?? null)} /></label><label>Job description file<input type="file" accept=".pdf,.docx,.txt,.md" onChange={(event) => setJdFile(event.target.files?.[0] ?? null)} /></label></div>
+          <p className="muted file-note">Or paste text for the bounded local analysis.</p><div className="inputs"><textarea aria-label="Resume" value={resume} onChange={(event) => setResume(event.target.value)} placeholder="Paste resume text" /><textarea aria-label="Job description" value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Paste job description" /></div>
           <div className="command-row"><button type="button" onClick={startMission} disabled={submitting || !resume.trim() || !jobDescription.trim()}>{submitting ? "Starting..." : "Start analysis"} <span>↗</span></button></div>
           {error && <p className="error" role="alert">{error}</p>}
-          {mission && <div className="mission-result"><p className="eyebrow">MISSION {mission.id}</p><p>Status: <strong>{mission.status}</strong> / Task: <strong>{mission.task.status}</strong></p>{mission.result && <><p>{mission.result.overall_match_explanation}</p><p>Matched: {mission.result.matching_skills.join(", ") || "None"}</p><p>Missing: {mission.result.missing_skills.join(", ") || "None"}</p><p className="muted">{mission.result.warnings.join(" ")}</p></>}{mission.error && <p className="error">{mission.error}</p>}</div>}
+          {mission && <div className="mission-result"><p className="eyebrow">MISSION {mission.id}</p><p>Status: <strong>{mission.status}</strong> / Task: <strong>{mission.task.status}</strong></p>{mission.result && <div className="analysis-grid"><section><span className="eyebrow">MATCH SCORE</span><strong className="score">{mission.result.match_analysis.overall_match_score}</strong><p>{mission.result.match_analysis.score_explanation}</p></section><section><h3>Source files</h3><p>{mission.result.resume.file_name}</p><p>{mission.result.job_description.file_name}</p></section><section><h3>Matching skills</h3><p>{mission.result.match_analysis.matching_skills.join(", ") || "None detected"}</p><h3>Missing skills</h3><p>{mission.result.match_analysis.missing_skills.join(", ") || "None detected"}</p></section><section><h3>Defects</h3>{mission.result.defect_analysis.resume_defects.map((defect) => <p className="warning" key={defect.issue}><b>{defect.severity}</b> {defect.issue}</p>)}</section><section><h3>Priority plan</h3>{mission.result.action_plan.map((item) => <p key={item.priority}><b>{item.priority}.</b> {item.action}</p>)}</section><section><h3>Evidence</h3><p>{mission.result.evidence.map((item) => `${item.source}: ${item.quote}`).join(" | ") || "No evidence detected"}</p></section></div>}{mission.error && <p className="error">{mission.error}</p>}</div>}
         </section>
         <section className="overview"><div><p className="eyebrow">WORKSPACE</p><h2>Quiet systems. Traceable work.</h2><p className="muted">The first vertical slice is the Resume / JD intelligence workflow. No provider or external side effect is enabled by default.</p></div><div className="stat"><strong>0</strong><span>active missions</span></div><div className="stat"><strong>0</strong><span>pending approvals</span></div></section>
         <section className="surface-grid">{surfaces.map(([title, detail], index) => <article className="surface" key={title}><span className="index">0{index + 1}</span><h3>{title}</h3><p>{detail}</p><span className="status">AVAILABLE IN FOUNDATION</span></article>)}</section>
