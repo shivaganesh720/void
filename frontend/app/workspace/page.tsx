@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const DEFAULT_PROJECT_ID = "00000000-0000-0000-0000-000000000001";
-type View = "dashboard" | "missions" | "approvals" | "artifacts" | "settings";
+type View = "dashboard" | "missions" | "capabilities" | "knowledge" | "memory" | "approvals" | "artifacts" | "settings";
 type Task = { id: string; name: string; status: string; result?: Record<string, unknown> | null; error?: string | null };
 type MissionEvent = { id: string; mission_id: string; event_type: string; timestamp: string; detail: string };
 type Analysis = {
@@ -22,6 +22,9 @@ type Project = { id: string; name: string };
 const navigation: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "missions", label: "Missions" },
+  { id: "capabilities", label: "Capabilities" },
+  { id: "knowledge", label: "Knowledge" },
+  { id: "memory", label: "Memory" },
   { id: "approvals", label: "Approvals" },
   { id: "artifacts", label: "Artifacts" },
   { id: "settings", label: "Settings" },
@@ -171,6 +174,24 @@ export default function Home() {
           <div><p className="eyebrow">GOVERNANCE</p><h2>Approval Center</h2></div>
         </div>
         <EmptyState title="No pending approvals" detail="There are no missions currently blocked awaiting your authorization." />
+      </section>}
+      {view === "capabilities" && <section className="page-section">
+        <div className="section-heading">
+          <div><p className="eyebrow">REGISTRY</p><h2>Capabilities</h2></div>
+        </div>
+        <EmptyState title="Capabilities Loading" detail="The capability registry is currently running in local fallback mode. See backend/app/control_plane/capabilities.py for registered items." />
+      </section>}
+      {view === "knowledge" && <section className="page-section">
+        <div className="section-heading">
+          <div><p className="eyebrow">RAG</p><h2>Knowledge Base</h2></div>
+        </div>
+        <EmptyState title="No documents indexed" detail="Upload a document via the universal command to begin chunking and RAG ingestion." />
+      </section>}
+      {view === "memory" && <section className="page-section">
+        <div className="section-heading">
+          <div><p className="eyebrow">PREFERENCES</p><h2>Workspace Memory</h2></div>
+        </div>
+        <EmptyState title="Memory is empty" detail="No facts or preferences have been committed to long-term memory for this project." />
       </section>}
       {view === "artifacts" && <section className="page-section">
         <div className="section-heading">

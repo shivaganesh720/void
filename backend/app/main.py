@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import auth, projects, missions, admin, health, approvals, gateways, knowledge, workflows, websockets
+from app.routers import auth, projects, missions, admin, health, approvals, gateways, knowledge, workflows, websockets, memory, companion
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0")
@@ -32,3 +32,5 @@ app.include_router(gateways.router)
 app.include_router(knowledge.router)
 app.include_router(workflows.router)
 app.include_router(websockets.router)
+app.include_router(memory.router, prefix="/api/v1")
+app.include_router(companion.router)

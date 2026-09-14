@@ -24,6 +24,17 @@ class AgentRegistry:
         
         self.register(
             AgentDefinition(
+                id="manager_agent",
+                name="Manager / Supervisor Agent",
+                version="1.0",
+                role="Coordinate child agents, aggregate results, and ensure overall task success.",
+                responsibilities=("Orchestrate parallel workflows", "Validate combined agent outputs", "Handle task retries"),
+                tool_allowlist=(),
+                risk_level=RiskLevel.MEDIUM,
+            )
+        )
+        self.register(
+            AgentDefinition(
                 id="resume_agent",
                 name="Resume Intelligence Agent",
                 version="1.0",
@@ -39,9 +50,53 @@ class AgentRegistry:
                 name="Research Agent",
                 version="1.0",
                 role="Perform web searches and gather evidence.",
-                responsibilities=("Search the web for claims", "Extract evidence from sources"),
+                responsibilities=("Search the web for claims", "Extract evidence from sources", "Ensure source freshness"),
                 tool_allowlist=("web_search", "url_fetcher"),
                 risk_level=RiskLevel.HIGH,
+            )
+        )
+        self.register(
+            AgentDefinition(
+                id="data_analyst_agent",
+                name="Data Analyst Agent",
+                version="1.0",
+                role="Profile data, execute aggregations, and detect outliers.",
+                responsibilities=("Process CSV/JSON data", "Perform pandas aggregations", "Generate summary charts"),
+                tool_allowlist=("csv_reader", "json_reader", "python_sandbox"),
+                risk_level=RiskLevel.MEDIUM,
+            )
+        )
+        self.register(
+            AgentDefinition(
+                id="coding_agent",
+                name="Coding Agent",
+                version="1.0",
+                role="Review code, generate tests, and suggest refactors safely.",
+                responsibilities=("Analyze repositories", "Suggest code diffs", "Generate unit tests"),
+                tool_allowlist=("code_parser", "github_client"),
+                risk_level=RiskLevel.HIGH,
+            )
+        )
+        self.register(
+            AgentDefinition(
+                id="validator_agent",
+                name="Validator Agent",
+                version="1.0",
+                role="Critique and validate other agents' output against requirements.",
+                responsibilities=("Check for hallucinations", "Verify constraints", "Output quality scoring"),
+                tool_allowlist=(),
+                risk_level=RiskLevel.LOW,
+            )
+        )
+        self.register(
+            AgentDefinition(
+                id="report_agent",
+                name="Report Agent",
+                version="1.0",
+                role="Synthesize multiple artifacts into final professional reports.",
+                responsibilities=("Format markdown", "Generate PDFs", "Generate Docx"),
+                tool_allowlist=("pdf_writer", "docx_writer"),
+                risk_level=RiskLevel.LOW,
             )
         )
 
