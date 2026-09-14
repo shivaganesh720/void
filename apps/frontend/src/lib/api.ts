@@ -8,7 +8,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { credentials: "include", ...init });
-  if (response.status === 401 && typeof window !== "undefined") window.location.assign("/sign-in");
+  if (response.status === 401 && typeof window !== "undefined") window.location.assign(new URL("/sign-in", window.location.origin));
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     const detail = payload?.error?.message ?? payload?.detail;

@@ -73,7 +73,7 @@ export default function WorkspacePage() {
     } finally { setLoading(false); }
   }, [projectId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { queueMicrotask(() => void load()); }, [load]);
 
   const createMission = async (prompt: string, options: CommandOptions) => {
     if (!projectId) return;
