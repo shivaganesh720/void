@@ -21,7 +21,7 @@ from app.repositories.projects import project_repo
 from app.capabilities.resume_jd.service import analyze_resume_against_jd
 from app.capabilities.resume_jd.parser import build_analysis, validate_analysis
 from app.execution.task_state import validate_transition
-from app.api.deps import DEFAULT_DEMO_USER_ID
+from app.api.deps import DEFAULT_DEMO_USER_ID, _get_or_create_legacy_project
 from app.capabilities.registry import CapabilityRegistry
 from app.capabilities.broker import AgentRegistry, AgentHarness
 from app.execution.orchestrator import MissionOrchestrator
@@ -36,14 +36,7 @@ def _ensure_project_access(db: DbSession, project_id: UUID, user: User) -> Proje
     project = project_repo.get(db, project_id)
     if not project:
         if user.id == DEFAULT_DEMO_USER_ID:
-            project = project_repo.create(db, {
-                "id": project_id,
-                "name": "Legacy Local Project",
-                "owner_id": user.id,
-            })
-            member = ProjectMember(project_id=project.id, user_id=user.id, role="OWNER")
-            db.add(member)
-            db.flush()
+            project = _get_or_create_legacy_project(db, project_id, user.id)
             return project
         raise HTTPException(status_code=404, detail="PROJECT_NOT_FOUND")
     # Demo user always has full access regardless of ownership

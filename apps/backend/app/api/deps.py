@@ -3,10 +3,11 @@ from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.core.security import decode_token, hash_password
-from app.models.base import User
+from app.models.base import ProjectMember, User
 from app.db.session import create_session_factory
 from app.repositories.projects import project_repo
 from app.repositories.users import user_repo
@@ -17,6 +18,50 @@ DEFAULT_DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000099")
 DEFAULT_DEMO_USER_EMAIL = "demo@void.local"
 
 SessionLocal = create_session_factory()
+
+
+def _get_or_create_demo_user(db: Session) -> User:
+    user = user_repo.get(db, DEFAULT_DEMO_USER_ID)
+    if user:
+        return user
+
+    try:
+        with db.begin_nested():
+            user_repo.create(db, {
+                "id": DEFAULT_DEMO_USER_ID,
+                "email": DEFAULT_DEMO_USER_EMAIL,
+                "password_hash": hash_password("demo-password"),
+                "full_name": "Demo User",
+                "role": "USER",
+            })
+    except IntegrityError:
+        # Another request may have provisioned the fixed development identity.
+        # The savepoint keeps this request's session usable after the race.
+        pass
+
+    return user_repo.get(db, DEFAULT_DEMO_USER_ID) or user_repo.get_by_id(db, DEFAULT_DEMO_USER_ID)
+
+
+def _get_or_create_legacy_project(db: Session, project_id: UUID, owner_id: UUID):
+    from app.models.base import Project
+
+    project = project_repo.get(db, project_id)
+    if project:
+        return project
+    try:
+        with db.begin_nested():
+            project = project_repo.create(db, {
+                "id": project_id,
+                "name": "Legacy Local Project",
+                "owner_id": owner_id,
+            })
+            db.add(ProjectMember(project_id=project_id, user_id=owner_id, role="OWNER"))
+            db.flush()
+    except IntegrityError:
+        project = project_repo.get(db, project_id)
+    if not project:
+        raise HTTPException(status_code=409, detail="PROJECT_PROVISIONING_CONFLICT")
+    return project
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -47,16 +92,8 @@ def get_current_user(
 
     if not token:
         # Dev fallback – auto-provision demo user on first hit
-        user = user_repo.get(db, DEFAULT_DEMO_USER_ID)
-        if not user:
-            user = user_repo.create(db, {
-                "id": DEFAULT_DEMO_USER_ID,
-                "email": DEFAULT_DEMO_USER_EMAIL,
-                "password_hash": hash_password("demo-password"),
-                "full_name": "Demo User",
-                "role": "USER",
-            })
-            db.commit()
+        user = _get_or_create_demo_user(db)
+        db.commit()
         return user
 
     decoded = decode_token(token, token_kind="access")
@@ -82,13 +119,7 @@ def require_project_access(
     if not project:
         if current_user.id == DEFAULT_DEMO_USER_ID:
             # Auto-provision legacy project for the demo user
-            project = project_repo.create(db, {
-                "id": project_id,
-                "name": "Legacy Local Project",
-                "owner_id": current_user.id,
-            })
-            member = ProjectMember(project_id=project.id, user_id=current_user.id, role="OWNER")
-            db.add(member)
+            project = _get_or_create_legacy_project(db, project_id, current_user.id)
             db.commit()
             db.refresh(project)
             return project

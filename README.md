@@ -82,6 +82,7 @@ void/
 ## Quick Start
 
 ### Prerequisites
+
 - Python 3.11+
 - Node.js 20+
 - Git
@@ -124,12 +125,14 @@ cd ../..
 ### 4. Run — Development Mode
 
 **Terminal 1 — Backend:**
+
 ```powershell
 $env:PYTHONPATH = "apps\backend"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir apps\backend --host 127.0.0.1 --port 8000 --reload
 ```
 
 **Terminal 2 — Frontend:**
+
 ```powershell
 cd apps\frontend
 $env:NEXT_PUBLIC_API_BASE_URL = "http://127.0.0.1:8000"
@@ -142,17 +145,17 @@ Open **http://localhost:3000**
 
 ## API Endpoints
 
-| Category | Base Path |
-|---|---|
-| Auth | `POST /api/v1/auth/login` |
-| Auth | `POST /api/v1/auth/register` |
-| Auth | `POST /api/v1/auth/logout` |
-| Auth | `GET  /api/v1/auth/me` |
-| Projects | `GET/POST /api/v1/projects` |
-| Missions | `POST /api/v1/missions/universal` |
-| Missions | `GET  /api/v1/missions/{id}` |
-| Dashboard | `GET  /api/v1/dashboard/summary` |
-| Health | `GET  /health` |
+| Category  | Base Path                         |
+| --------- | --------------------------------- |
+| Auth      | `POST /api/v1/auth/login`         |
+| Auth      | `POST /api/v1/auth/register`      |
+| Auth      | `POST /api/v1/auth/logout`        |
+| Auth      | `GET  /api/v1/auth/me`            |
+| Projects  | `GET/POST /api/v1/projects`       |
+| Missions  | `POST /api/v1/missions/universal` |
+| Missions  | `GET  /api/v1/missions/{id}`      |
+| Dashboard | `GET  /api/v1/dashboard/summary`  |
+| Health    | `GET  /health/ready`              |
 
 Full reference: [`docs/API.md`](docs/API.md)
 
@@ -173,14 +176,14 @@ Full details: [`docs/SECURITY.md`](docs/SECURITY.md)
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Backend | FastAPI, SQLAlchemy, Alembic, SQLite (dev) |
-| Auth | JWT (access + refresh), HttpOnly cookies |
-| Frontend | Next.js 16, React 19, TypeScript |
-| Animations | Framer Motion |
-| Icons | Lucide React |
-| Testing | Pytest (backend), Vitest (frontend) |
+| Layer      | Technology                                 |
+| ---------- | ------------------------------------------ |
+| Backend    | FastAPI, SQLAlchemy, Alembic, SQLite (dev) |
+| Auth       | JWT (access + refresh), HttpOnly cookies   |
+| Frontend   | Next.js 16, React 19, TypeScript           |
+| Animations | Framer Motion                              |
+| Icons      | Lucide React                               |
+| Testing    | Pytest (backend), Vitest (frontend)        |
 
 ---
 

@@ -53,6 +53,23 @@ def test_database_settings_expose_runtime_pool_and_health_configuration() -> Non
     assert database_health_check(engine) is True
 
 
+def test_file_backed_sqlite_creates_missing_parent_directory(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'nested' / 'void.sqlite3'}"
+
+    engine = get_engine_for_settings(Settings(database_url=database_url))
+    assert database_health_check(engine) is True
+    assert (tmp_path / "nested").is_dir()
+    engine.dispose()
+
+
+def test_file_backed_sqlite_does_not_use_single_connection_pool(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'void.sqlite3'}"
+
+    engine = get_engine_for_settings(Settings(database_url=database_url))
+    assert not isinstance(engine.pool, StaticPool)
+    engine.dispose()
+
+
 def test_alembic_environment_targets_project_metadata() -> None:
     env_path = Path(__file__).parent.parent.parent / "alembic" / "env.py"
     content = env_path.read_text(encoding="utf-8")

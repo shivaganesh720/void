@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -13,13 +15,26 @@ from app.models.base import Base
 DEFAULT_DATABASE_URL = "sqlite:///./.local/void.sqlite3"
 
 
+def _ensure_sqlite_parent(database_url: str) -> None:
+    """Create the parent directory for file-backed SQLite databases."""
+    database = make_url(database_url).database
+    if not database or database == ":memory:":
+        return
+    Path(database).expanduser().parent.mkdir(parents=True, exist_ok=True)
+
+
 def _build_engine_kwargs(database_url: str, settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
     engine_kwargs: dict[str, Any] = {"future": True, "echo": bool(settings.db_echo)}
 
     if database_url.startswith("sqlite"):
-        engine_kwargs["poolclass"] = StaticPool
+        _ensure_sqlite_parent(database_url)
         engine_kwargs["connect_args"] = {"check_same_thread": False}
+        if make_url(database_url).database in {None, ":memory:"}:
+            # In-memory databases need one shared connection so their schema
+            # survives across sessions. File-backed SQLite must use the
+            # default pool so concurrent requests do not share one cursor.
+            engine_kwargs["poolclass"] = StaticPool
         return engine_kwargs
 
     engine_kwargs.update(
