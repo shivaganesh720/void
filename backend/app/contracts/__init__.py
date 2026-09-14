@@ -1,1 +1,0 @@
-"""Stable API and domain contracts."""

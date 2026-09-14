@@ -1,1 +1,0 @@
-"""Secure file validation and extraction boundaries."""
