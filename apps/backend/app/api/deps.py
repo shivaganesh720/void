@@ -1,7 +1,7 @@
 from typing import Generator
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -28,10 +28,17 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def get_current_user(
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> User:
-    if not authorization:
+    token = request.cookies.get("void_access_token")
+    if not token and authorization:
+        scheme, _, token_from_header = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            token = token_from_header
+
+    if not token:
         # Dev fallback – auto-provision demo user on first hit
         user = user_repo.get(db, DEFAULT_DEMO_USER_ID)
         if not user:
@@ -45,18 +52,14 @@ def get_current_user(
             db.commit()
         return user
 
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid auth scheme")
-
     decoded = decode_token(token, token_kind="access")
     if not decoded:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="AUTH_INVALID_TOKEN")
 
     user_id, _email = decoded
     user = user_repo.get(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="AUTH_USER_NOT_FOUND")
 
     return user
 
@@ -70,8 +73,8 @@ def require_project_access(
 
     project = project_repo.get(db, project_id)
     if not project:
-        # Auto-provision legacy project for the demo user
         if current_user.id == DEFAULT_DEMO_USER_ID:
+            # Auto-provision legacy project for the demo user
             project = project_repo.create(db, {
                 "id": project_id,
                 "name": "Legacy Local Project",
@@ -84,7 +87,53 @@ def require_project_access(
             return project
         raise HTTPException(status_code=404, detail="PROJECT_NOT_FOUND")
 
+    # Demo user always has full access regardless of ownership (dev mode)
+    if current_user.id == DEFAULT_DEMO_USER_ID:
+        return project
+
     if project.owner_id != current_user.id and not project_repo.has_access(db, project_id, current_user.id):
         raise HTTPException(status_code=403, detail="PROJECT_ACCESS_DENIED")
 
     return project
+
+
+# Simple static RBAC policy mapping
+ROLE_PERMISSIONS = {
+    "OWNER": ["project:read", "project:update", "project:delete", "mission:read", "mission:create", "mission:execute", "mission:delete", "member:invite"],
+    "ADMIN": ["project:read", "project:update", "mission:read", "mission:create", "mission:execute", "mission:delete", "member:invite"],
+    "MEMBER": ["project:read", "mission:read", "mission:create", "mission:execute"],
+    "VIEWER": ["project:read", "mission:read"],
+}
+
+
+class RequirePermission:
+    def __init__(self, resource: str, action: str):
+        self.permission = f"{resource}:{action}"
+
+    def __call__(self, project_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+        from app.models.base import Project, ProjectMember
+
+        project = project_repo.get(db, project_id)
+
+        if not project:
+            if current_user.id == DEFAULT_DEMO_USER_ID:
+                return require_project_access(project_id, current_user, db)
+            raise HTTPException(status_code=404, detail="AUTH_RESOURCE_NOT_FOUND")
+
+        # Demo user always has full access (dev mode)
+        if current_user.id == DEFAULT_DEMO_USER_ID:
+            return project
+
+        role = "VIEWER"
+        if project.owner_id == current_user.id:
+            role = "OWNER"
+        else:
+            member = db.query(ProjectMember).filter_by(project_id=project_id, user_id=current_user.id).first()
+            if not member:
+                raise HTTPException(status_code=403, detail="AUTH_PERMISSION_DENIED")
+            role = member.role
+
+        if self.permission not in ROLE_PERMISSIONS.get(role, []):
+            raise HTTPException(status_code=403, detail="AUTH_PERMISSION_DENIED")
+
+        return project

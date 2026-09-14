@@ -37,7 +37,12 @@ export default function WorkspacePage() {
   async function ensureProject() {
     let projectId = localStorage.getItem("void_project_id");
     if (!projectId) {
-      const response = await fetch(`${API_BASE}/api/v1/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Default Project", description: "Auto-created project" }) });
+      const response = await fetch(`${API_BASE}/api/v1/projects`, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        credentials: "include",
+        body: JSON.stringify({ name: "Default Project", description: "Auto-created project" }) 
+      });
       if (!response.ok) throw new Error("Failed to initialize project");
       const data = await response.json();
       projectId = data.id;
@@ -47,9 +52,10 @@ export default function WorkspacePage() {
   }
 
   async function getJson<T>(path: string): Promise<T> {
-    const token = localStorage.getItem("void_access_token");
-    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-    const response = await fetch(`${API_BASE}${path}`, { headers });
+    const response = await fetch(`${API_BASE}${path}`, { credentials: "include" });
+    if (response.status === 401) {
+      window.location.href = "/sign-in";
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
   }
@@ -58,7 +64,7 @@ export default function WorkspacePage() {
     try {
       setLoading(true);
       const projectId = await ensureProject();
-      const data = await getJson<ProjectSummary>(`/api/v1/projects/${projectId}/summary`);
+      const data = await getJson<ProjectSummary>(`/api/v1/dashboard/summary?project_id=${projectId}`);
       setSummary(data);
       setDataError("");
     } catch {
@@ -84,13 +90,16 @@ export default function WorkspacePage() {
     setSubmitting(true); setError(""); setMission(null);
     try {
       const projectId = await ensureProject();
-      const token = localStorage.getItem("void_access_token");
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
       const response = await fetch(`${API_BASE}/api/v1/missions/universal`, {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ project_id: projectId, prompt })
       });
+      if (response.status === 401) {
+        window.location.href = "/sign-in";
+        return;
+      }
       const payload = await response.json(); 
       if (!response.ok) throw new Error(payload.detail?.[0]?.msg ?? payload.detail ?? "Mission request failed");
       setMission(payload); 

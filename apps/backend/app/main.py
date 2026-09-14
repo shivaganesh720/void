@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -25,12 +25,54 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 logger = logging.getLogger("void.execution")
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+import uuid
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    code = str(exc.detail) if isinstance(exc.detail, str) and "_" in exc.detail else "API_ERROR"
+    msg = exc.detail if isinstance(exc.detail, str) else "An unexpected error occurred."
+    
+    if exc.detail == "AUTH_INVALID_CREDENTIALS":
+        msg = "Invalid email or password."
+    elif exc.detail == "AUTH_INVALID_TOKEN":
+        msg = "Invalid or expired session token."
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": msg,
+                "details": {},
+                "request_id": str(uuid.uuid4())
+            }
+        }
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Invalid request payload.",
+                "details": {},
+                "request_id": str(uuid.uuid4())
+            }
+        }
+    )
+
 from app.middleware import AuditMiddleware
 
 app.add_middleware(AuditMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

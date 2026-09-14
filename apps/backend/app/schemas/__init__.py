@@ -60,6 +60,21 @@ class UserSummaryResponse(BaseModel):
     onboarding_completed: bool = False
     created_at: datetime | None = None
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+    new_password: str = Field(min_length=8, max_length=200)
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(min_length=8, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
+
+
 
 class ProfileUpdateRequest(BaseModel):
     ai_awareness: str = Field(default="AI_UNAWARE", pattern="^(AI_UNAWARE|AI_AWARE)$")

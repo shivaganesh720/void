@@ -45,6 +45,9 @@ def _ensure_project_access(db: DbSession, project_id: UUID, user: User) -> Proje
             db.flush()
             return project
         raise HTTPException(status_code=404, detail="PROJECT_NOT_FOUND")
+    # Demo user always has full access regardless of ownership
+    if user.id == DEFAULT_DEMO_USER_ID:
+        return project
     if project.owner_id != user.id and not project_repo.has_access(db, project_id, user.id):
         raise HTTPException(status_code=403, detail="PROJECT_ACCESS_DENIED")
     return project
