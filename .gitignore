@@ -78,3 +78,14 @@ desktop.ini
 # ─────────────────────────────────────────
 *.log
 *.tmp
+# Pytest temporary directories
+.pytest_cache/
+**/.pytest_cache/
+**/.tmp-pytest/
+**/*tmp-pytest*/
+
+# Pytest temporary directories
+.pytest_cache/
+**/.pytest_cache/
+**/.tmp-pytest/
+**/*tmp-pytest*/
