@@ -378,10 +378,13 @@ button:disabled {
 .void-table td { padding: 16px; border-bottom: 1px solid var(--void-border-light); font-size: 14px; }
 .void-table tr:hover td { background: var(--void-glass-light); }
 
-/* Legacy Login page overrides so it doesn't look totally broken before we fix it */
-.auth-page { min-height: 100vh; display: grid; place-items: center; }
-.auth-panel { background: rgba(10, 15, 24, 0.85); backdrop-filter: blur(20px); padding: 40px; border-radius: 16px; border: 1px solid var(--void-border); width: 100%; max-width: 440px; }
-.auth-panel h1 { font-size: 24px; margin-bottom: 8px; }
+/* Auth Pages */
+.auth-page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; align-items: center; justify-content: center; padding: 0; margin: 0; }
+.auth-visual { padding: 40px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(34, 211, 238, 0.05)); height: 100vh; }
+.auth-visual h1 { font-size: 48px; margin-bottom: 16px; }
+.auth-panel { display: flex; justify-content: center; align-items: center; height: 100vh; background: var(--void-background); }
+.auth-form-wrap { background: rgba(10, 15, 24, 0.85); backdrop-filter: blur(20px); padding: 40px; border-radius: 16px; border: 1px solid var(--void-border); width: 100%; max-width: 440px; }
+.auth-form-wrap h2 { font-size: 24px; margin-bottom: 8px; }
 
 /* Dashboard Universal Command Legacy support */
 .command { padding: 24px; background: var(--void-glass); border-radius: 16px; border: 1px solid var(--void-border); margin-bottom: 32px; }

@@ -1,87 +1,75 @@
 # VOID
-
 **Versatile Orchestrated Intelligent Dispatcher**: a governed local execution prototype with a bounded Resume/JD analysis workflow.
 
 ## Status
+VOID is structured as an enterprise-grade MVC monorepo (`apps/backend` and `apps/frontend`). It delivers a governed product journey from public landing page through registration, onboarding, project-scoped workspace, and deterministic Resume/JD analysis.
 
-VOID currently delivers a local governed product journey from public landing page through registration, onboarding, project-scoped workspace, and deterministic Resume/JD analysis. It is suitable for local demonstration and portfolio review, but is not production-ready.
+## Key Features
+- **MVC Backend**: Clean architectural boundaries across `api`, `controllers`, `services`, `repositories`, and `models`.
+- **Feature-Driven Frontend**: Next.js 16 UI structured strictly by feature modules inside `src/`.
+- **Hardened Security**: Protected endpoints, safe file uploads, and project-isolated tenant boundaries.
 
-## Problem and solution
-
-Automation systems need policy, validation, evidence, and visible execution state outside model authority. VOID explores that control-plane shape. The implemented slice accepts resume and job-description text or files, validates and parses them, compares skills deterministically, validates structured output, and exposes mission, task, and event state.
-
-## Key features
-
-- FastAPI liveness/readiness and typed API contracts.
-- Safe bounded PDF, DOCX, TXT, and Markdown input handling.
-- Deterministic skill matching, defects, recommendations, and source-labelled evidence.
-- Local SQLite-backed mission, user, and project state for mission list, detail, task, event timeline, filtering, and dashboard summary.
-- Next.js interface with loading, empty, error, refresh, and truthful unavailable states.
-
-## Architecture and workflow
-
-The frontend calls the FastAPI boundary. The API validates input, creates a project-scoped mission, runs the synchronous Resume/JD workflow, validates the result, records lifecycle events, and persists the local development payload in SQLite. SQLAlchemy entity definitions still describe a future PostgreSQL repository boundary and are not connected to runtime queries.
-
-1. Open the local dashboard.
-2. Paste both documents or upload a supported pair.
-3. Start analysis and inspect the completed mission and result.
-4. Open Missions to filter and inspect task state and lifecycle events.
-5. Refresh or restart to confirm local SQLite state survives the backend process restart; PostgreSQL durability and migration wiring remain deferred.
-
-See [docs/README.md](docs/README.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [docs/end-to-end-workflow.md](docs/end-to-end-workflow.md).
-
-## Technology stack
-
-Python 3.x, FastAPI, Pydantic Settings, Uvicorn, SQLAlchemy model definitions, pypdf, pytest, Next.js 16, React 19, TypeScript, and npm.
-
-## Installation and environment
+## Installation and Environment
 
 Windows PowerShell is the verified local path. From the repository root:
 
 ```powershell
+# 1. Setup Virtual Environment & Backend
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-Set-Location frontend
-npm install
-Set-Location ..
+.\.venv\Scripts\python.exe -m pip install -r apps\backend\requirements.txt
 Copy-Item .env.example .env
+
+# 2. Setup Frontend
+Set-Location apps\frontend
+npm install
+Set-Location ..\..
 ```
 
-The current runtime reads `ENVIRONMENT`, `DATABASE_URL`, `RUNTIME_DB_PATH`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT`, `DB_POOL_RECYCLE`, `DB_ECHO`, `MAX_UPLOAD_BYTES`, and `ALLOWED_ORIGINS`. Local missions, users, and projects use the SQLite path in `RUNTIME_DB_PATH` (default `.local/void.sqlite3`), while `DATABASE_URL` can be set to PostgreSQL for durable backend work. The frontend optionally reads `NEXT_PUBLIC_API_BASE_URL` and otherwise uses `http://127.0.0.1:8000`.
+## Run and Test
 
-## Run and test
-
-Backend:
+### Start the Backend Server
 
 ```powershell
-$env:PYTHONPATH = "backend"
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+$env:PYTHONPATH = "apps\backend"
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir apps\backend --host 127.0.0.1 --port 8000 --reload
 ```
 
-Frontend, in another PowerShell window:
+### Start the Frontend Server
+In a separate PowerShell window:
 
 ```powershell
-Set-Location frontend
+Set-Location apps\frontend
 $env:NEXT_PUBLIC_API_BASE_URL = "http://127.0.0.1:8000"
 npm run dev
 ```
 
-Open `http://localhost:3000`. Verify with `$env:PYTHONPATH="backend"; .\.venv\Scripts\python.exe -m pytest tests\unit -q`, `npm run build`, and `npm audit` from `frontend`.
+Open `http://localhost:3000` to view the VOID application.
 
-## Demo and screenshots
+### Run Tests
 
-Follow [docs/demo-runbook.md](docs/demo-runbook.md). No screenshots are committed yet; the runbook identifies the dashboard, completed result, and mission timeline views to capture for a portfolio presentation.
+Backend Tests:
+```powershell
+Set-Location apps\backend
+$env:PYTHONPATH = "."
+..\..\.venv\Scripts\python.exe -m pytest tests/
+```
 
-## Security and limitations
+Frontend Build & Tests:
+```powershell
+Set-Location apps\frontend
+npx vitest run
+npm run build
+```
 
-Upload validation, output validation, CORS configuration, safe logging, bearer authentication, project membership checks, and local SQLite identity storage are covered in the current slice. Refresh-token rotation, PostgreSQL identity storage, email delivery, and production deployment hardening remain deferred. See [docs/security-model.md](docs/security-model.md) and [docs/REQUIREMENT_STATUS.md](docs/REQUIREMENT_STATUS.md).
+## Project Structure
 
-## Project structure
+```
+VOID/
+├── apps/
+│   ├── backend/          # FastAPI MVC application
+│   └── frontend/         # Next.js 16 Feature-driven application
+├── docs/                 # Architectural and security documentation
+└── storage/              # Git-ignored local development payloads
+```
 
-`backend/app` contains the API, contracts, control-plane helpers, parsing, and workflow. `frontend` contains the Next.js presentation shell. `tests/unit` contains backend tests. `docs` contains release, architecture, security, testing, and limitation reports.
-
-## Roadmap and contribution
-
-The next release prerequisites are authenticated identity and project membership, database sessions/migrations/repositories, durable mission state, a worker contract, and integration/browser tests. Do not present planned control-plane components as implemented. Contributions should preserve the boundaries in [DEVELOPMENT_RULES.md](DEVELOPMENT_RULES.md) and update the relevant status report.
-
-Author and contribution attribution should be added by the project owner before public publication.
+See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) and [docs/status/RESTRUCTURE_REPORT.md](docs/status/RESTRUCTURE_REPORT.md) for deeper technical overviews of the implementation.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Zap, Lock } from "lucide-react";
+import { ArrowRight, ShieldCheck, Zap, Lock, Target } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -54,6 +54,30 @@ export default function LandingPage() {
           </div>
         </div>
       </main>
+
+      {/* Services Section */}
+      <section id="product" style={{ padding: '80px 24px', background: 'var(--void-background-secondary)' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: '32px', textAlign: 'center', marginBottom: '48px' }}>Services Provided</h2>
+          <div className="grid-cols-3">
+            <div className="glass-card">
+              <div style={{ color: 'var(--void-cyan)', marginBottom: '16px' }}><Zap size={32} /></div>
+              <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Deterministic Analysis</h3>
+              <p className="text-secondary" style={{ fontSize: '14px', lineHeight: 1.6 }}>Analyze resumes against Job Descriptions with guaranteed reproducible outputs, strict structure validation, and isolated execution.</p>
+            </div>
+            <div className="glass-card">
+              <div style={{ color: 'var(--void-purple)', marginBottom: '16px' }}><ShieldCheck size={32} /></div>
+              <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Policy Enforcement</h3>
+              <p className="text-secondary" style={{ fontSize: '14px', lineHeight: 1.6 }}>Every action is evaluated against project-level governance rules. Unauthorized capabilities and unsafe prompts are automatically blocked.</p>
+            </div>
+            <div className="glass-card">
+              <div style={{ color: 'var(--void-success)', marginBottom: '16px' }}><Target size={32} /></div>
+              <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>Workspace Isolation</h3>
+              <p className="text-secondary" style={{ fontSize: '14px', lineHeight: 1.6 }}>Project-scoped workspaces ensure data boundaries are respected. Track mission states, event timelines, and artifact generation securely.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
       <footer style={{ borderTop: '1px solid var(--void-border)', padding: '48px', textAlign: 'center' }} className="glass-panel text-muted">
