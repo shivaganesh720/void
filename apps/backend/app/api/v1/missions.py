@@ -15,7 +15,7 @@ from app.schemas import (
     MissionEventResponse
 )
 from app.core.config import get_settings
-from app.models.base import User, Project, Mission, Task, LifecycleEvent, ProjectMember
+from app.models.base import User, Project, Mission, Task, LifecycleEvent, ProjectMember, Approval, ExecutionProfile, Artifact, Evidence, CostRecord
 from app.utils.text import ParsedDocument, parse_document
 from app.repositories.projects import project_repo
 from app.capabilities.resume_jd.service import analyze_resume_against_jd
@@ -24,6 +24,7 @@ from app.execution.task_state import validate_transition
 from app.api.deps import DEFAULT_DEMO_USER_ID
 from app.capabilities.registry import CapabilityRegistry
 from app.capabilities.broker import AgentRegistry, AgentHarness
+from app.execution.orchestrator import MissionOrchestrator
 
 router = APIRouter(tags=["missions"])
 logger = logging.getLogger("void.execution")
@@ -123,7 +124,7 @@ def _execute_resume_jd(db: DbSession, mission: Mission, task: Task, resume_text:
         raise exc
 
 
-def _format_mission(mission: Mission, task: Task, events: list[LifecycleEvent]) -> dict:
+def _format_mission(mission: Mission, task: Task, events: list[LifecycleEvent], db: DbSession | None = None) -> dict:
     formatted_events = [
         MissionEventResponse(
             id=e.id,
@@ -133,6 +134,29 @@ def _format_mission(mission: Mission, task: Task, events: list[LifecycleEvent]) 
             detail=e.detail
         ) for e in events
     ]
+    approvals = []
+    profile = None
+    if db is not None:
+        profile_record = db.query(ExecutionProfile).filter(ExecutionProfile.mission_id == mission.id).first()
+        profile = profile_record.profile_json if profile_record else None
+        approvals = [
+            {
+                "id": approval.id,
+                "mission_id": approval.mission_id,
+                "task_id": approval.task_id,
+                "requested_action": approval.requested_action,
+                "risk_reason": approval.risk_reason,
+                "required_by_policy": approval.required_by_policy,
+                "status": approval.status,
+                "requested_at": approval.created_at,
+                "reviewed_at": approval.reviewed_at,
+                "reviewer_id": approval.reviewer_id,
+                "reviewer_comment": approval.reviewer_comment,
+                "expiration": approval.expiration,
+                "metadata": approval.metadata_json or {},
+            }
+            for approval in db.query(Approval).filter(Approval.mission_id == mission.id).order_by(Approval.created_at.desc()).all()
+        ]
     return {
         "id": mission.id,
         "project_id": mission.project_id,
@@ -149,11 +173,13 @@ def _format_mission(mission: Mission, task: Task, events: list[LifecycleEvent]) 
         "result": mission.metadata_json.get("result") if mission.metadata_json else None,
         "error": mission.error,
         "execution_mode": mission.execution_mode,
+        "execution_profile": profile,
+        "approval_required": mission.approval_required,
         "created_at": mission.created_at,
         "updated_at": mission.updated_at,
         "completed_at": mission.completed_at,
         "events": formatted_events,
-        "approvals": []
+        "approvals": approvals,
     }
 
 
@@ -196,67 +222,21 @@ def create_universal_mission(
     db: DbSession = Depends(get_db)
 ):
     project = _ensure_project_access(db, request.project_id, current_user)
-    prompt_lower = request.prompt.lower()
-    
-    # Simple Mock Intent Gate routing
-    slug = "rag"
-    agent_id = "manager_agent"
-    
-    if "research" in prompt_lower or "framework" in prompt_lower:
-        slug = "research"
-        agent_id = "research_agent"
-    elif "analyze" in prompt_lower or "csv" in prompt_lower or "data" in prompt_lower:
-        slug = "data_analysis"
-        agent_id = "data_analyst_agent"
-    elif "code" in prompt_lower or "flask" in prompt_lower or "python" in prompt_lower:
-        slug = "code_analysis"
-        agent_id = "coding_agent"
-    elif "report" in prompt_lower or "presentation" in prompt_lower:
-        slug = "report_generation"
-        agent_id = "report_agent"
-    elif "learn" in prompt_lower or "roadmap" in prompt_lower:
-        slug = "learning"
-        agent_id = "manager_agent"
-        
-    registry = CapabilityRegistry()
-    agents = AgentRegistry()
-    capability = registry.get(slug)
-    agent_def = agents.get(agent_id)
-    
-    mission = Mission(
+    orchestrator = MissionOrchestrator()
+    mission, task = orchestrator.create_and_plan(
+        db,
         project_id=project.id,
-        intent=request.prompt,
-        status=MissionStatus.COMPLETED.value,
-        execution_mode=request.execution_profile.execution_mode if request.execution_profile else "AUTO",
+        user=current_user,
+        prompt=request.prompt,
+        execution_profile=request.execution_profile,
     )
-    db.add(mission)
-    db.flush()
-
-    task = Task(mission_id=mission.id, name=f"run_{slug}", status=TaskStatus.SUCCEEDED.value)
-    db.add(task)
-    db.flush()
-
-    _record_event(db, mission, "MISSION_CREATED", f"Universal mission created matching '{capability.name}'.")
-    _record_event(db, mission, "AGENT_ASSIGNED", f"Assigned to {agent_def.name}.")
-    _record_event(db, mission, "MISSION_COMPLETED", "Task successfully completed by agent.")
-    
-    mission.metadata_json = {
-        "result": {
-            "output": f"Mock output from {agent_def.name} executing capability {capability.name}.",
-            "agent": agent_def.name,
-            "capability": capability.name,
-            "risk_level": capability.risk_level.name,
-            "tools_used": list(agent_def.tool_allowlist)
-        }
-    }
-    task.result_json = mission.metadata_json["result"]
-    mission.completed_at = datetime.now(UTC)
+    if mission.status == MissionStatus.READY.value:
+        orchestrator.execute(db, mission=mission, task=task, user=current_user)
     db.commit()
     db.refresh(mission)
     db.refresh(task)
-    
-    events = db.query(LifecycleEvent).filter(LifecycleEvent.mission_id == mission.id).all()
-    return _format_mission(mission, task, events)
+    events = db.query(LifecycleEvent).filter(LifecycleEvent.mission_id == mission.id).order_by(LifecycleEvent.created_at).all()
+    return _format_mission(mission, task, events, db)
 
 
 @router.post("/api/v1/missions/resume-jd/upload", response_model=MissionDetailResponse, status_code=201)
@@ -394,6 +374,59 @@ def dashboard_summary(
     }
 
 
+@router.get("/api/v1/projects/{project_id}/artifacts")
+def list_project_artifacts(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: DbSession = Depends(get_db),
+):
+    _ensure_project_access(db, project_id, current_user)
+    artifacts = db.query(Artifact).filter(Artifact.project_id == project_id).order_by(Artifact.created_at.desc()).all()
+    return [
+        {
+            "id": artifact.id,
+            "name": artifact.name,
+            "type": artifact.type,
+            "mime_type": artifact.mime_type,
+            "size_bytes": artifact.size_bytes,
+            "status": artifact.status,
+            "created_at": artifact.created_at,
+            "mission_id": artifact.mission_id,
+            "task_id": artifact.task_id,
+        }
+        for artifact in artifacts
+    ]
+
+
+@router.get("/api/v1/projects/{project_id}/evidence")
+def list_project_evidence(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: DbSession = Depends(get_db),
+):
+    _ensure_project_access(db, project_id, current_user)
+    evidence = (
+        db.query(Evidence)
+        .join(Mission, Evidence.mission_id == Mission.id)
+        .filter(Mission.project_id == project_id)
+        .order_by(Evidence.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": record.id,
+            "mission_id": record.mission_id,
+            "task_id": record.task_id,
+            "source": record.source,
+            "label": record.label,
+            "quote": record.quote,
+            "confidence": record.confidence,
+            "created_at": record.created_at,
+        }
+        for record in evidence
+    ]
+
+
 @router.get("/api/v1/missions/{mission_id}", response_model=MissionDetailResponse)
 def get_mission_detail(
     mission_id: UUID,
@@ -412,7 +445,62 @@ def get_mission_detail(
         raise HTTPException(status_code=404, detail="TASK_NOT_FOUND")
 
     events = db.query(LifecycleEvent).filter(LifecycleEvent.mission_id == mission.id).all()
-    return _format_mission(mission, task, events)
+    return _format_mission(mission, task, events, db)
+
+
+@router.post("/api/v1/missions/{mission_id}/actions/{action}", response_model=MissionDetailResponse)
+def control_mission(
+    mission_id: UUID,
+    action: str,
+    project_id: UUID = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: DbSession = Depends(get_db),
+):
+    """Apply an explicit lifecycle action; invalid state changes are rejected."""
+    _ensure_project_access(db, project_id, current_user)
+    mission = db.query(Mission).filter(Mission.id == mission_id, Mission.project_id == project_id).first()
+    if not mission:
+        raise HTTPException(status_code=404, detail="MISSION_NOT_FOUND")
+    task = db.query(Task).filter(Task.mission_id == mission.id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="TASK_NOT_FOUND")
+
+    orchestrator = MissionOrchestrator()
+    normalized = action.casefold()
+    try:
+        if normalized == "pause":
+            orchestrator._set_mission_status(mission, MissionStatus.PAUSED)
+            orchestrator.record_event(db, mission, "MISSION_PAUSED", "Execution paused by an authorized user.")
+        elif normalized == "resume":
+            orchestrator._set_mission_status(mission, MissionStatus.RUNNING)
+            orchestrator.record_event(db, mission, "MISSION_RESUMED", "Execution resumed by an authorized user.")
+            orchestrator.execute(db, mission=mission, task=task, user=current_user)
+        elif normalized == "cancel":
+            current = MissionStatus(mission.status)
+            if current in {MissionStatus.REQUESTED, MissionStatus.DRAFT, MissionStatus.VALIDATING, MissionStatus.PLANNED, MissionStatus.WAITING_FOR_INPUT, MissionStatus.WAITING_FOR_APPROVAL, MissionStatus.READY, MissionStatus.APPROVED}:
+                orchestrator._set_mission_status(mission, MissionStatus.CANCELLED)
+            else:
+                orchestrator._set_mission_status(mission, MissionStatus.CANCELLING)
+                orchestrator._set_mission_status(mission, MissionStatus.CANCELLED)
+            if TaskStatus(task.status) not in {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+                orchestrator._set_task_status(task, TaskStatus.CANCELLED)
+            orchestrator.record_event(db, mission, "MISSION_CANCELLED", "Execution cancelled by an authorized user.")
+        elif normalized == "retry":
+            if MissionStatus(mission.status) not in {MissionStatus.FAILED, MissionStatus.TIMED_OUT, MissionStatus.BLOCKED}:
+                raise ValueError("MISSION_RETRY_NOT_ALLOWED")
+            # A retry is a new immutable version of the existing request,
+            # avoiding an illegal transition out of a terminal run.
+            raise HTTPException(status_code=409, detail="MISSION_RETRY_CREATES_NEW_VERSION")
+        else:
+            raise HTTPException(status_code=422, detail="MISSION_ACTION_UNSUPPORTED")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    db.commit()
+    db.refresh(mission)
+    db.refresh(task)
+    events = db.query(LifecycleEvent).filter(LifecycleEvent.mission_id == mission.id).order_by(LifecycleEvent.created_at).all()
+    return _format_mission(mission, task, events, db)
 
 
 @router.get("/api/v1/missions/{mission_id}/tasks", response_model=list[dict])

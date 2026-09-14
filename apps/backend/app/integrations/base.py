@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+import csv
+import io
 from typing import Any, Callable
 
 
@@ -28,6 +30,15 @@ class ToolDefinition:
     description: str
     risk_level: ToolRisk
     input_schema: dict[str, Any]
+    version: str = "1.0"
+    output_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
+    permission_requirements: tuple[str, ...] = ("project:execute",)
+    privacy_level: str = "STANDARD"
+    allowed_agents: tuple[str, ...] = ()
+    allowed_execution_modes: tuple[str, ...] = ("AUTO", "GUIDED", "MANUAL")
+    timeout_seconds: int = 30
+    rate_limit_per_minute: int = 30
+    estimated_cost: float = 0.0
     requires_approval: bool = False
     enabled: bool = True
 
@@ -86,3 +97,51 @@ class SafeToolGateway:
 
     def list_tools(self) -> list[ToolDefinition]:
         return list(self._tools.values())
+
+
+def build_local_tool_gateway() -> SafeToolGateway:
+    """Register local adapters whose behavior is safe and executable offline.
+
+    Network, mail, browser, and desktop integrations are intentionally not
+    registered as enabled tools until a provider connection is configured.
+    This prevents a catalog entry from masquerading as a successful external
+    integration.
+    """
+    gateway = SafeToolGateway()
+    gateway.register(
+        ToolDefinition(
+            name="document_parse",
+            description="Extract simple structural facts from supplied text.",
+            risk_level=ToolRisk.LOW,
+            input_schema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+            allowed_agents=("resume_agent", "document_agent", "evidence_agent"),
+        ),
+        executor=lambda payload, _context: {"characters": len(payload["text"]), "lines": len(payload["text"].splitlines()), "preview": payload["text"][:500]},
+    )
+    gateway.register(
+        ToolDefinition(
+            name="csv_inspect",
+            description="Inspect a CSV payload locally without executing code.",
+            risk_level=ToolRisk.LOW,
+            input_schema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+            allowed_agents=("data_analyst_agent",),
+        ),
+        executor=lambda payload, _context: _inspect_csv(payload["text"]),
+    )
+    gateway.register(
+        ToolDefinition(
+            name="text_classify",
+            description="Perform deterministic local text classification metadata extraction.",
+            risk_level=ToolRisk.LOW,
+            input_schema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+            allowed_agents=("manager_agent", "document_agent"),
+        ),
+        executor=lambda payload, _context: {"word_count": len(payload["text"].split()), "empty": not bool(payload["text"].strip())},
+    )
+    return gateway
+
+
+def _inspect_csv(text: str) -> dict[str, Any]:
+    rows = list(csv.reader(io.StringIO(text)))
+    header = rows[0] if rows else []
+    return {"columns": header, "column_count": len(header), "row_count": max(0, len(rows) - 1)}

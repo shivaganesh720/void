@@ -54,19 +54,27 @@ class ModelMode(StrEnum):
 
 
 class MissionStatus(StrEnum):
-    DRAFT = "DRAFT"
+    # REQUESTED is kept separate from validation so the audit trail can tell
+    # an accepted request from one that has actually passed the intent gate.
+    REQUESTED = "REQUESTED"
+    DRAFT = "DRAFT"  # Backwards-compatible alias for legacy persisted work.
     VALIDATING = "VALIDATING"
     PLANNED = "PLANNED"
+    WAITING_FOR_INPUT = "WAITING_FOR_INPUT"
     WAITING_FOR_APPROVAL = "WAITING_FOR_APPROVAL"
+    READY = "READY"
     APPROVED = "APPROVED"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"
     CANCELLING = "CANCELLING"
     CANCELLED = "CANCELLED"
     COMPLETED = "COMPLETED"
+    PARTIALLY_COMPLETED = "PARTIALLY_COMPLETED"
     FAILED = "FAILED"
     BLOCKED = "BLOCKED"
     EXPIRED = "EXPIRED"
+    TIMED_OUT = "TIMED_OUT"
+    REQUIRES_REVIEW = "REQUIRES_REVIEW"
 
 
 class TaskStatus(StrEnum):

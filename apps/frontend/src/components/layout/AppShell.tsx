@@ -15,7 +15,7 @@ export function AppShell({ children, currentView, onNavigate }: AppShellProps) {
     <div className="app-layout">
       <Sidebar currentView={currentView} onNavigate={onNavigate} />
       <div className="main-content">
-        <Topbar />
+        <Topbar onCommand={() => onNavigate?.("dashboard")} />
         <div className="workspace-scroll-area">
           {children}
         </div>

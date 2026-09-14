@@ -1,25 +1,19 @@
 "use client";
 
 import React from "react";
-import { Search, Bell, User } from "lucide-react";
+import { Command, Search, ShieldCheck, User } from "lucide-react";
 
-export function Topbar() {
+export function Topbar({ onCommand }: { onCommand?: () => void }) {
   return (
     <div className="topbar-container">
       <div className="flex-row">
-        <div className="void-input" style={{ display: 'flex', alignItems: 'center', width: '300px', gap: '8px', padding: '6px 12px' }}>
+        <button type="button" onClick={onCommand} className="topbar-command" aria-label="Open Universal Command">
           <Search size={16} className="text-muted" />
-          <input 
-            type="text" 
-            placeholder="Search / Command (Ctrl+K)" 
-            style={{ background: 'transparent', border: 'none', width: '100%', outline: 'none', fontSize: '13px' }} 
-          />
-        </div>
+          <span>Open Universal Command</span><kbd>⌘ K</kbd>
+        </button>
       </div>
       <div className="flex-row">
-        <button style={{ color: 'var(--void-text-muted)' }}>
-          <Bell size={18} />
-        </button>
+        <div className="topbar-health"><ShieldCheck size={16} /> Local policy online</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: '12px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
             <span style={{ fontSize: '13px', fontWeight: 600 }}>Administrator</span>

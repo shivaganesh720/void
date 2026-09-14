@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import os
 from typing import Any
 
 
@@ -98,10 +99,38 @@ class ModelGateway:
         return [0.1, 0.2, 0.3]
 
     def health_check(self, provider_name: str | None = None) -> bool:
-        return True
+        normalized = (provider_name or "local").casefold()
+        if normalized in {"local", "test", "ollama", "local-test-model"}:
+            # The deterministic provider is shipped in-process.  Ollama is
+            # reported as unconfigured until its adapter is selected rather
+            # than being represented as a successful remote connection.
+            return normalized != "ollama" or bool(os.getenv("OLLAMA_BASE_URL"))
+        env_key = {
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+        }.get(normalized)
+        return bool(env_key and os.getenv(env_key))
 
-    def list_models(self, provider_name: str | None = None) -> list[str]:
-        return ["local-test-model"]
+    def list_models(self, provider_name: str | None = None) -> list[dict[str, Any]]:
+        """Expose model availability without exposing credentials.
+
+        Remote entries represent configured adapters only when their required
+        key is present.  The local deterministic model is always usable and
+        is selected automatically when no provider can be used.
+        """
+        catalog = [
+            {"id": "local-test-model", "provider": "test", "capability_classes": ["ROUTER_FAST", "GENERAL_WORKER", "LOCAL_PRIVATE"], "privacy_level": "LOCAL", "supports_tools": False, "supports_vision": False, "supports_structured_output": True, "availability": "AVAILABLE", "fallback": True},
+            {"id": "openai", "provider": "openai", "capability_classes": ["GENERAL_WORKER", "REASONING_PREMIUM", "CODING"], "privacy_level": "EXTERNAL", "supports_tools": True, "supports_vision": True, "supports_structured_output": True, "availability": "AVAILABLE" if self.health_check("openai") else "UNCONFIGURED", "fallback": False},
+            {"id": "gemini", "provider": "gemini", "capability_classes": ["GENERAL_WORKER", "VISION_DOCUMENT", "RESEARCH_EVIDENCE"], "privacy_level": "EXTERNAL", "supports_tools": True, "supports_vision": True, "supports_structured_output": True, "availability": "AVAILABLE" if self.health_check("gemini") else "UNCONFIGURED", "fallback": False},
+            {"id": "anthropic", "provider": "anthropic", "capability_classes": ["GENERAL_WORKER", "REASONING_PREMIUM", "CODING"], "privacy_level": "EXTERNAL", "supports_tools": True, "supports_vision": True, "supports_structured_output": True, "availability": "AVAILABLE" if self.health_check("anthropic") else "UNCONFIGURED", "fallback": False},
+            {"id": "openrouter", "provider": "openrouter", "capability_classes": ["GENERAL_WORKER", "RESEARCH_EVIDENCE"], "privacy_level": "EXTERNAL", "supports_tools": True, "supports_vision": True, "supports_structured_output": True, "availability": "AVAILABLE" if self.health_check("openrouter") else "UNCONFIGURED", "fallback": False},
+            {"id": "ollama", "provider": "ollama", "capability_classes": ["LOCAL_PRIVATE", "CODING", "DOCUMENT_PARSE"], "privacy_level": "LOCAL", "supports_tools": False, "supports_vision": True, "supports_structured_output": False, "availability": "AVAILABLE" if self.health_check("ollama") else "UNCONFIGURED", "fallback": False},
+        ]
+        if provider_name:
+            return [model for model in catalog if model["provider"] == provider_name.casefold() or model["id"] == provider_name]
+        return catalog
 
     def estimate_cost(self, *, model_name: str, tokens: int) -> float:
         return max(0.0001, round(tokens * 0.0003, 6))

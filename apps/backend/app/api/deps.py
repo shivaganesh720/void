@@ -32,11 +32,18 @@ def get_current_user(
     authorization: str | None = Header(default=None, alias="Authorization"),
     db: Session = Depends(get_db),
 ) -> User:
-    token = request.cookies.get("void_access_token")
-    if not token and authorization:
+    # An explicitly supplied Bearer token represents the caller for this
+    # request.  It must take precedence over a browser cookie: API clients
+    # commonly share a cookie jar while exercising multiple identities, and
+    # allowing the cookie to win can turn a request into a confused-deputy
+    # authorization bug.
+    token: str | None = None
+    if authorization:
         scheme, _, token_from_header = authorization.partition(" ")
         if scheme.lower() == "bearer":
             token = token_from_header
+    if not token:
+        token = request.cookies.get("void_access_token")
 
     if not token:
         # Dev fallback – auto-provision demo user on first hit

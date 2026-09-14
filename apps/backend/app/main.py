@@ -43,6 +43,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={
+            # Retain FastAPI's conventional field for clients that have not
+            # adopted the structured control-plane envelope yet.
+            "detail": exc.detail,
             "error": {
                 "code": code,
                 "message": msg,
@@ -57,10 +60,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={
+            # Keep FastAPI's interoperable validation contract as well as the
+            # stable platform error envelope.  Clients can highlight a field
+            # without parsing a human-readable message.
+            "detail": exc.errors(),
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "Invalid request payload.",
-                "details": {},
+                "details": exc.errors(),
                 "request_id": str(uuid.uuid4())
             }
         }

@@ -3,16 +3,19 @@ from app.core.exceptions import ERRORS
 
 
 MISSION_TRANSITIONS: dict[MissionStatus, set[MissionStatus]] = {
+    MissionStatus.REQUESTED: {MissionStatus.VALIDATING, MissionStatus.CANCELLED},
     MissionStatus.DRAFT: {MissionStatus.VALIDATING, MissionStatus.CANCELLED},
-    MissionStatus.VALIDATING: {MissionStatus.PLANNED, MissionStatus.BLOCKED, MissionStatus.FAILED},
-    MissionStatus.PLANNED: {MissionStatus.WAITING_FOR_APPROVAL, MissionStatus.APPROVED, MissionStatus.BLOCKED},
-    MissionStatus.WAITING_FOR_APPROVAL: {MissionStatus.APPROVED, MissionStatus.BLOCKED, MissionStatus.EXPIRED},
+    MissionStatus.VALIDATING: {MissionStatus.PLANNED, MissionStatus.WAITING_FOR_INPUT, MissionStatus.BLOCKED, MissionStatus.FAILED},
+    MissionStatus.PLANNED: {MissionStatus.WAITING_FOR_INPUT, MissionStatus.WAITING_FOR_APPROVAL, MissionStatus.READY, MissionStatus.APPROVED, MissionStatus.BLOCKED, MissionStatus.REQUIRES_REVIEW},
+    MissionStatus.WAITING_FOR_INPUT: {MissionStatus.VALIDATING, MissionStatus.CANCELLED, MissionStatus.BLOCKED},
+    MissionStatus.WAITING_FOR_APPROVAL: {MissionStatus.APPROVED, MissionStatus.BLOCKED, MissionStatus.EXPIRED, MissionStatus.CANCELLED},
+    MissionStatus.READY: {MissionStatus.RUNNING, MissionStatus.CANCELLED, MissionStatus.WAITING_FOR_APPROVAL},
     MissionStatus.APPROVED: {MissionStatus.RUNNING, MissionStatus.CANCELLED},
-    MissionStatus.RUNNING: {MissionStatus.PAUSED, MissionStatus.CANCELLING, MissionStatus.COMPLETED, MissionStatus.FAILED},
-    MissionStatus.PAUSED: {MissionStatus.RUNNING, MissionStatus.CANCELLING},
+    MissionStatus.RUNNING: {MissionStatus.PAUSED, MissionStatus.CANCELLING, MissionStatus.COMPLETED, MissionStatus.PARTIALLY_COMPLETED, MissionStatus.FAILED, MissionStatus.TIMED_OUT, MissionStatus.REQUIRES_REVIEW},
+    MissionStatus.PAUSED: {MissionStatus.RUNNING, MissionStatus.CANCELLING, MissionStatus.CANCELLED},
     MissionStatus.CANCELLING: {MissionStatus.CANCELLED, MissionStatus.FAILED},
-    MissionStatus.CANCELLED: set(), MissionStatus.COMPLETED: set(), MissionStatus.FAILED: set(),
-    MissionStatus.BLOCKED: set(), MissionStatus.EXPIRED: set(),
+    MissionStatus.CANCELLED: set(), MissionStatus.COMPLETED: set(), MissionStatus.PARTIALLY_COMPLETED: set(), MissionStatus.FAILED: set(),
+    MissionStatus.BLOCKED: set(), MissionStatus.EXPIRED: set(), MissionStatus.TIMED_OUT: set(), MissionStatus.REQUIRES_REVIEW: set(),
 }
 
 

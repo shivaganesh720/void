@@ -14,6 +14,17 @@ class AgentDefinition:
     tool_allowlist: tuple[str, ...] = ()
     model_class: str = "GENERAL_WORKER"
     risk_level: RiskLevel = RiskLevel.MEDIUM
+    identity: str = "VOID governed agent cell"
+    objective: str = "Complete its assigned typed task within policy bounds."
+    non_responsibilities: tuple[str, ...] = ("Authorize itself", "Call unallowlisted tools", "Override policy")
+    prompt_version: str = "1.0"
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+    budget_tokens: int = 8_000
+    timeout_seconds: int = 300
+    retry_limit: int = 2
+    privacy_level: str = "STANDARD"
+    enabled: bool = True
 
 
 class AgentRegistry:
@@ -33,6 +44,18 @@ class AgentRegistry:
                 risk_level=RiskLevel.MEDIUM,
             )
         )
+        # Every cell is registered centrally.  The manager coordinates work
+        # through typed task state; these descriptors are not independently
+        # executable endpoints.
+        for agent in (
+            AgentDefinition("planner_agent", "Planner Agent", "1.0", "Turn normalized intent into a bounded task graph.", ("Create execution blueprints", "Identify dependencies")),
+            AgentDefinition("learning_agent", "Learning Agent", "1.0", "Build sequenced learning roadmaps.", ("Set milestones", "Recommend practice"), risk_level=RiskLevel.LOW),
+            AgentDefinition("document_agent", "Document Agent", "1.0", "Parse and transform governed documents.", ("Extract structure", "Draft document content"), tool_allowlist=("document_parse",)),
+            AgentDefinition("critic_agent", "Critic Agent", "1.0", "Challenge output quality before completion.", ("Find unsupported claims", "Identify missing constraints"), risk_level=RiskLevel.LOW),
+            AgentDefinition("evidence_agent", "Evidence Agent", "1.0", "Trace claims to approved sources.", ("Collect citations", "Score evidence"), tool_allowlist=("web_search", "document_parse"), risk_level=RiskLevel.HIGH),
+            AgentDefinition("export_agent", "Export Agent", "1.0", "Create governed output artifacts.", ("Generate export manifests", "Hash artifacts"), tool_allowlist=("pdf_writer", "docx_writer"), risk_level=RiskLevel.LOW),
+        ):
+            self.register(agent)
         self.register(
             AgentDefinition(
                 id="resume_agent",
@@ -107,6 +130,9 @@ class AgentRegistry:
         if agent_id not in self._agents:
             raise KeyError(f"Agent '{agent_id}' not found.")
         return self._agents[agent_id]
+
+    def list(self) -> tuple[AgentDefinition, ...]:
+        return tuple(self._agents.values())
 
 
 class AgentHarness:
