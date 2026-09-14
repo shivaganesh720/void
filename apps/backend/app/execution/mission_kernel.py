@@ -60,8 +60,38 @@ class WorkGraph:
     def add_task(self, task: TaskNode) -> None:
         self.nodes[task.id] = task
 
+    def validate(self) -> None:
+        """Reject malformed dependency graphs before scheduling can inspect them."""
+        missing = {
+            dependency
+            for task in self.nodes.values()
+            for dependency in task.dependencies
+            if dependency not in self.nodes
+        }
+        if missing:
+            missing_ids = ", ".join(sorted(str(item) for item in missing))
+            raise ValueError(f"INVALID_DEPENDENCY:{missing_ids}")
+
+        visiting: set[UUID] = set()
+        visited: set[UUID] = set()
+
+        def visit(task_id: UUID) -> None:
+            if task_id in visiting:
+                raise ValueError("WORK_GRAPH_CYCLE")
+            if task_id in visited:
+                return
+            visiting.add(task_id)
+            for dependency in self.nodes[task_id].dependencies:
+                visit(dependency)
+            visiting.remove(task_id)
+            visited.add(task_id)
+
+        for task_id in self.nodes:
+            visit(task_id)
+
     def get_ready_tasks(self) -> list[TaskNode]:
         """Returns tasks whose dependencies have all SUCCEEDED."""
+        self.validate()
         ready = []
         for task in self.nodes.values():
             if task.state in (TaskState.CREATED, TaskState.QUEUED):
@@ -72,6 +102,7 @@ class WorkGraph:
 
     def mark_blocked(self) -> None:
         """Marks tasks as BLOCKED if their dependencies FAILED."""
+        self.validate()
         for task in self.nodes.values():
             if task.state in (TaskState.CREATED, TaskState.QUEUED):
                 deps_failed = any(self.nodes[dep_id].state in (TaskState.FAILED, TaskState.CANCELLED, TaskState.TIMED_OUT) for dep_id in task.dependencies)

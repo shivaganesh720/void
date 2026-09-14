@@ -2,7 +2,7 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, AlertTriangle, Bot, Boxes, CheckCircle2, CircleDollarSign, Clock3, FileBox, FileSearch,
+  Activity, AlertTriangle, Bot, Boxes, CheckCircle2, CircleDollarSign, Clock3, Cpu, FileBox, FileSearch,
   GitBranch, KeyRound, Play, RefreshCw, ShieldCheck, Sparkles, SquareArrowOutUpRight, XCircle,
 } from "lucide-react";
 import { AppShell } from "../../components/layout/AppShell";
@@ -188,7 +188,7 @@ function MissionDetail({ mission, onControl, busy }: { mission: Mission; onContr
   const actions = mission.status === "RUNNING" ? ["pause", "cancel"] : mission.status === "PAUSED" ? ["resume", "cancel"] : mission.status === "WAITING_FOR_APPROVAL" ? ["cancel"] : [];
   return <section className="content-card mission-detail"><div className="card-header"><div><p className="eyebrow">MISSION {mission.id.slice(0, 8)}</p><h2>{mission.intent}</h2></div><div className="inline-actions"><StatusBadge value={mission.status} />{actions.map((action) => <button key={action} className={action === "cancel" ? "button-secondary danger-action" : "button-secondary"} onClick={() => onControl(mission, action)} disabled={busy}>{action}</button>)}</div></div>
     <nav className="detail-tabs" aria-label="Mission detail tabs">{tabs.map((entry) => <button key={entry} className={tab === entry ? "active" : ""} onClick={() => setTab(entry)}>{entry}</button>)}</nav>
-    {tab === "overview" && <div className="detail-grid"><Detail label="Execution mode" value={mission.execution_mode} /><Detail label="Task status" value={mission.task.status} /><Detail label="Created" value={formatDate(mission.created_at)} /><Detail label="Approval" value={mission.approval_required ? "Required" : "Not required"} />{mission.error && <Detail label="Error" value={mission.error} />}{mission.result?.summary && <div className="detail-full"><p className="eyebrow">VALIDATED OUTPUT</p><p>{String(mission.result.summary)}</p></div>}</div>}
+    {tab === "overview" && <div className="detail-grid"><Detail label="Execution mode" value={mission.execution_mode} /><Detail label="Task status" value={mission.task.status} /><Detail label="Created" value={formatDate(mission.created_at)} /><Detail label="Approval" value={mission.approval_required ? "Required" : "Not required"} />{mission.error && <Detail label="Error" value={mission.error} />}{typeof mission.result?.summary === "string" && <div className="detail-full"><p className="eyebrow">VALIDATED OUTPUT</p><p>{mission.result.summary}</p></div>}</div>}
     {tab === "plan" && <JsonPanel value={blueprint ?? { message: "The persisted blueprint is available after mission planning." }} />}
     {tab === "execution" && <JsonPanel value={mission.result ?? { task: mission.task, status: mission.status }} />}
     {tab === "policy" && <JsonPanel value={{ approval_required: mission.approval_required, execution_profile: mission.execution_profile ?? {}, status: mission.status }} />}

@@ -1,4 +1,3 @@
-from unittest.mock import patch
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
@@ -15,8 +14,19 @@ def test_create_universal_mission_routing(client: TestClient, db_session):
     )
     assert res.status_code == 201
     data = res.json()
-    assert data["status"] == "COMPLETED"
-    assert "Mock output from Research Agent" in data["result"]["output"]
+    assert data["status"] == "WAITING_FOR_APPROVAL"
+    approval = data["approvals"][0]
+    approval_response = client.patch(
+        f"/api/v1/missions/{data['id']}/approvals/{approval['id']}?project_id={project_id}",
+        json={"decision": "APPROVED"},
+    )
+    assert approval_response.status_code == 200
+    assert approval_response.json()["status"] == "APPROVED"
+
+    mission = client.get(f"/api/v1/missions/{data['id']}?project_id={project_id}")
+    assert mission.status_code == 200
+    assert mission.json()["status"] == "COMPLETED"
+    assert mission.json()["result"]["provider"]["local_fallback"] is True
 
     # 2. Test Data Analysis Intent
     res2 = client.post(
@@ -27,7 +37,7 @@ def test_create_universal_mission_routing(client: TestClient, db_session):
         }
     )
     assert res2.status_code == 201
-    assert "Data Analyst Agent" in res2.json()["result"]["agent"]
+    assert res2.json()["status"] == "WAITING_FOR_INPUT"
 
     # 3. Test Invalid Project Access (Demo User Auto-Provisions)
     other_project = str(uuid4())
@@ -39,4 +49,5 @@ def test_create_universal_mission_routing(client: TestClient, db_session):
         }
     )
     assert res3.status_code == 201
-    assert "Manager / Supervisor Agent" in res3.json()["result"]["agent"]
+    assert res3.json()["status"] == "COMPLETED"
+    assert res3.json()["result"]["agent"]["name"] == "Manager / Supervisor Agent"

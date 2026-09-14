@@ -20,7 +20,7 @@ MISSION_TRANSITIONS: dict[MissionStatus, set[MissionStatus]] = {
 
 
 TASK_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
-    TaskStatus.CREATED: {TaskStatus.READY, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
+    TaskStatus.CREATED: {TaskStatus.READY, TaskStatus.WAITING, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
     TaskStatus.READY: {TaskStatus.QUEUED, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
     TaskStatus.QUEUED: {TaskStatus.RUNNING, TaskStatus.CANCELLED, TaskStatus.TIMED_OUT},
     TaskStatus.RUNNING: {TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.RETRYING, TaskStatus.CANCELLED, TaskStatus.TIMED_OUT},
