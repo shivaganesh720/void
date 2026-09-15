@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity, AlertTriangle, Bot, Boxes, CheckCircle2, CircleDollarSign, Clock3, Cpu, FileBox, FileSearch,
   GitBranch, KeyRound, Play, RefreshCw, ShieldCheck, Sparkles, SquareArrowOutUpRight, XCircle,
@@ -8,6 +9,7 @@ import {
 import { AppShell } from "../../components/layout/AppShell";
 import { UniversalCommandPanel, type CommandOptions } from "../../components/ui/UniversalCommandPanel";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { NexaFaceLauncher } from "../../components/ui/NexaVoiceAssistant";
 import { api, ApiError } from "../../lib/api";
 import type { Agent, Approval, Artifact, Capability, Evidence, Mission, ModelDescriptor, ProjectSummary, Workflow } from "../../types";
 
@@ -50,6 +52,7 @@ const viewTitles: Record<View, [string, string]> = {
 };
 
 export default function WorkspacePage() {
+  const router = useRouter();
   const [view, setView] = useState<View>("dashboard");
   const [projectId, setProjectId] = useState<string>();
   const [data, setData] = useState<ControlPlaneData>(emptyData);
@@ -113,7 +116,7 @@ export default function WorkspacePage() {
   const content = () => {
     if (loading && !data.summary) return <LoadingState />;
     switch (view) {
-      case "dashboard": return <Dashboard data={data} onCreate={createMission} busy={busy} onInspect={inspectMission} />;
+      case "dashboard": return <Dashboard data={data} onCreate={createMission} busy={busy} onInspect={inspectMission} onOpenNexa={() => router.push("/workspace/nexa")} />;
       case "missions": return <MissionsView missions={data.missions} selected={selectedMission} onInspect={inspectMission} onControl={controlMission} busy={busy} />;
       case "approvals": return <ApprovalsView approvals={data.approvals} onDecide={decideApproval} onInspect={(id) => { const mission = data.missions.find((entry) => entry.id === id); if (mission) void inspectMission(mission); }} busy={busy} />;
       case "capabilities": return <CapabilitiesView capabilities={data.capabilities} />;
@@ -149,10 +152,13 @@ export default function WorkspacePage() {
   );
 }
 
-function Dashboard({ data, onCreate, busy, onInspect }: { data: ControlPlaneData; onCreate: (prompt: string, options: CommandOptions) => void; busy: boolean; onInspect: (mission: Mission) => void }) {
+function Dashboard({ data, onCreate, busy, onInspect, onOpenNexa }: { data: ControlPlaneData; onCreate: (prompt: string, options: CommandOptions) => void; busy: boolean; onInspect: (mission: Mission) => void; onOpenNexa: () => void }) {
   const summary = data.summary;
   const approvalCount = data.approvals.filter((approval) => approval.status === "PENDING").length;
   return <div className="section-stack">
+    <div className="nexa-launch-row">
+      <NexaFaceLauncher onOpen={onOpenNexa} />
+    </div>
     <UniversalCommandPanel onExecute={onCreate} isExecuting={busy} />
     <section className="metric-grid" aria-label="Mission metrics">
       <Metric icon={<Boxes />} label="Total missions" value={summary?.total_missions ?? 0} />
