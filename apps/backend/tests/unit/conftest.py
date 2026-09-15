@@ -36,7 +36,9 @@ def db_session():
             db.close()
 
     app.dependency_overrides[get_db] = _override
-    yield
+    test_session = TestingSessionLocal()
+    yield test_session
+    test_session.close()
     app.dependency_overrides.clear()
     engine.dispose()
 

@@ -1,3 +1,4 @@
+import json
 import time
 from uuid import UUID
 import logging
@@ -19,13 +20,31 @@ class AuditMiddleware(BaseHTTPMiddleware):
     """
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
+        project_id_str = request.query_params.get("project_id")
+        if not project_id_str and request.headers.get("content-type", "").split(";", 1)[0].lower() == "application/json":
+            body = await request.body()
+            if body:
+                try:
+                    project_id_str = json.loads(body).get("project_id")
+                except (json.JSONDecodeError, AttributeError, TypeError):
+                    project_id_str = None
+
+            received = False
+
+            async def replay_body():
+                nonlocal received
+                if received:
+                    return {"type": "http.request", "body": b"", "more_body": False}
+                received = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            request._receive = replay_body
+
         response = await call_next(request)
         process_time = time.time() - start_time
 
         # Only log mutating API requests
         if request.url.path.startswith("/api/") and request.method in ["POST", "PUT", "PATCH", "DELETE"]:
-            project_id_str = request.query_params.get("project_id")
-            
             if project_id_str:
                 db: Session = SessionLocal()
                 try:

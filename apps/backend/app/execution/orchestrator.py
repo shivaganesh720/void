@@ -322,7 +322,8 @@ class MissionOrchestrator:
         content = json.dumps(report, indent=2, sort_keys=True)
         name = f"mission-{mission.id}-report.json"
         path = _ARTIFACT_ROOT / name
-        path.write_text(content, encoding="utf-8")
+        content_bytes = content.encode("utf-8")
+        path.write_bytes(content_bytes)
         return Artifact(
             project_id=mission.project_id,
             mission_id=mission.id,
@@ -332,8 +333,8 @@ class MissionOrchestrator:
             type="MISSION_REPORT",
             mime_type="application/json",
             storage_location=str(path),
-            content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
-            size_bytes=len(content.encode("utf-8")),
+            content_hash=hashlib.sha256(content_bytes).hexdigest(),
+            size_bytes=len(content_bytes),
             status="CREATED",
         )
 
